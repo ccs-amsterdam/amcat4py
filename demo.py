@@ -7,10 +7,10 @@ for index in indices:
     print(index)
 
 index = indices[0]['name']
-articles = list(amcat.query(index, fields=['date', 'title']))
+articles = list(amcat.query(index, fields=['method', 'method2']))
 print(len(articles))
 print(json.dumps(articles[0]))
 
-articles = list(amcat.query(index, fields=['_id'], q="terror*"))
-print(len(articles))
-print(json.dumps(articles[0]))
+# articles = list(amcat.query(index, fields=['_id'], q="terror*"))
+# print(len(articles))
+# print(json.dumps(articles[0]))

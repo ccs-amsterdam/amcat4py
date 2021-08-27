@@ -39,6 +39,9 @@ class AmcatClient:
         if q:
             params['q'] = q
         while True:
+
+            print(url)
+
             r = requests.get(url, auth=(self.username, self.password), params=params)
             if r.status_code == 404:
                 break

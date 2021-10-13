@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+'''
+Uploads multiple (gzipped or not) JSON files to AmCAT
+'''
+
+
 import json
 import gzip
 import argparse
@@ -8,18 +13,6 @@ from tqdm import tqdm
 from glob import glob
 from amcat4apiclient.amcat4apiclient import AmcatClient
 
-
-'''
-
-
- 
-
-
-
-# 
-
-
-'''
 
 
 def _chunker(x, chunksize = 100):

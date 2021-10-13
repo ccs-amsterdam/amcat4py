@@ -51,3 +51,14 @@ class AmcatClient:
             params['scroll_id'] = d['meta']['scroll_id']
 
 
+    def upload(self, index: str, documents: list):
+        """
+        Upload a set of documents to the server
+
+        :param index: The name of the index
+        :param documents: A list of dictionaries with at least the keys date, title, text
+        :return: response of the POST request to the server
+        """
+        url = f"{self.host}/index/{index}/documents"
+        r = requests.post(url, auth=(self.username, self.password), json=documents)
+        return r 

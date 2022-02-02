@@ -31,7 +31,7 @@ class AmcatClient:
         :param params: Any other parameters passed as query arguments
         :return: an iterator over the found documents with the requested (or all) fields
         """
-        url = f"{self.host}/index/{index}/query"
+        url = f"{self.host}/index/{index}/documents"
         params['scroll'] = scroll
         params['per_page'] = per_page
         if fields:
@@ -50,4 +50,45 @@ class AmcatClient:
             yield from d['results']
             params['scroll_id'] = d['meta']['scroll_id']
 
+    def create_index(self, name: str, guest_role: Optional[str] = None):
+        body = {"name": name}
+        print(f"body is {body}")
+        if guest_role:
+            body['guest_role'] = guest_role
+        url = f"{self.host}/index/"
+        print(url)
+        r = requests.post(url, json=body, auth=(self.username, self.password))
+        r.raise_for_status()
+        return r.json()
 
+    def check_index(self, name) -> Optional[dict]:
+        url = f"{self.host}/index/{name}"
+        r = requests.get(url, auth=(self.username, self.password))
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json()
+
+    def delete_index(self, name:str) -> bool:
+        url = f"{self.host}/index/{name}"
+        r = requests.delete(url, auth=(self.username, self.password))
+        if r.status_code == 404:
+            return False
+        r.raise_for_status()
+        return True
+
+    def upload_documents(self, index, articles, columns=None):
+        url = f"{self.host}/index/{index}/documents"
+        body = {"documents": articles}
+        if columns:
+            body['columns'] = columns
+        r = requests.post(url, json=body, auth=(self.username, self.password))
+        return r.json()
+
+    def check_documents(self, name) -> Optional[dict]:
+        url = f"{self.host}/index/{name}/query"
+        r = requests.get(url, auth=(self.username, self.password))
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json()

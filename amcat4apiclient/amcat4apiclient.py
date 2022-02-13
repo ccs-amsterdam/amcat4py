@@ -39,9 +39,6 @@ class AmcatClient:
         if q:
             params['q'] = q
         while True:
-
-            print(url)
-
             r = requests.get(url, auth=(self.username, self.password), params=params)
             if r.status_code == 404:
                 break
@@ -52,11 +49,9 @@ class AmcatClient:
 
     def create_index(self, name: str, guest_role: Optional[str] = None):
         body = {"name": name}
-        print(f"body is {body}")
         if guest_role:
             body['guest_role'] = guest_role
         url = f"{self.host}/index/"
-        print(url)
         r = requests.post(url, json=body, auth=(self.username, self.password))
         r.raise_for_status()
         return r.json()

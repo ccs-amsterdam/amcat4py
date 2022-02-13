@@ -72,18 +72,21 @@ class AmcatClient:
         r.raise_for_status()
         return True
 
-    def upload_documents(self, index, articles, columns=None):
+    def upload_documents(self, index: str, articles, columns=None):
         url = f"{self.host}/index/{index}/documents"
         body = {"documents": articles}
         if columns:
             body['columns'] = columns
         r = requests.post(url, json=body, auth=(self.username, self.password))
-        return r.json()
-
-    def check_documents(self, name) -> Optional[dict]:
-        url = f"{self.host}/index/{name}/query"
-        r = requests.get(url, auth=(self.username, self.password))
-        if r.status_code == 404:
-            return None
         r.raise_for_status()
         return r.json()
+
+    def update_document(self, index:str, doc_id, body):
+        url = f"{self.host}/index/{index}/documents/{doc_id}"
+        r = requests.put(url, json=body, auth=(self.username, self.password))
+        r.raise_for_status()
+
+    def set_columns(self, index: str, body):
+        url = f"{self.host}/index/{index}/fields"
+        r = requests.post(url, json=body, auth=(self.username, self.password))
+        r.raise_for_status()

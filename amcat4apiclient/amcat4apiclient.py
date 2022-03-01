@@ -1,4 +1,4 @@
-from typing import List, Iterable, Optional
+from typing import List, Iterable, Optional, Union, Dict, Sequence
 
 import requests
 
@@ -8,18 +8,44 @@ class AmcatClient:
         self.username = username
         self.password = password
 
+    def url(self, url=None, index=None):
+        url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
+        return "/".join(url_parts)
+
+    def get(self, url=None, index=None, params=None, ignore_status=None):
+        # TODO: Use token based auth
+        r = requests.get(self.url(url, index), params=params, auth=(self.username, self.password))
+        if not (ignore_status and r.status_code in ignore_status):
+            r.raise_for_status()
+        return r
+
+    def post(self, url=None, index=None, json=None, ignore_status=None):
+        r = requests.post(self.url(url, index), json=json, auth=(self.username, self.password))
+        if not (ignore_status and r.status_code in ignore_status):
+            r.raise_for_status()
+        return r
+
+    def put(self, url=None, index=None, json=None, ignore_status=None):
+        r = requests.put(self.url(url, index), json=json, auth=(self.username, self.password))
+        if not (ignore_status and r.status_code in ignore_status):
+            r.raise_for_status()
+        return r
+
+    def delete(self, url=None, index=None, ignore_status=None):
+        r = requests.delete(self.url(url, index), auth=(self.username, self.password))
+        if not (ignore_status and r.status_code in ignore_status):
+            r.raise_for_status()
+        return r
+
     def list_indices(self) -> List[dict]:
         """
         List all indices on this server
         :return: a list of index dicts with keys name and (your) role
         """
-        url = f"{self.host}/index/"
-        r = requests.get(url, auth=(self.username, self.password))
-        r.raise_for_status()
-        return r.json()
+        return self.get("/index/").json()
 
-    def query(self, index: str, q: Optional[str]= None, *,
-              fields=('date', 'title', 'url'), scroll='2m', per_page=100, **params) -> Iterable[dict]:
+    def documents(self, index: str, q: Optional[str]= None, *,
+                  fields=('date', 'title', 'url'), scroll='2m', per_page=100, **params) -> Iterable[dict]:
         """
         Perform a query on this server, scrolling over the results to get all hits
 
@@ -31,7 +57,6 @@ class AmcatClient:
         :param params: Any other parameters passed as query arguments
         :return: an iterator over the found documents with the requested (or all) fields
         """
-        url = f"{self.host}/index/{index}/documents"
         params['scroll'] = scroll
         params['per_page'] = per_page
         if fields:
@@ -39,54 +64,61 @@ class AmcatClient:
         if q:
             params['q'] = q
         while True:
-            r = requests.get(url, auth=(self.username, self.password), params=params)
+            r = self.get("documents", index=index, params=params, ignore_status=[404])
             if r.status_code == 404:
                 break
-            r.raise_for_status()
             d = r.json()
             yield from d['results']
             params['scroll_id'] = d['meta']['scroll_id']
 
-    def create_index(self, name: str, guest_role: Optional[str] = None):
-        body = {"name": name}
+    def query(self, index: str, *,
+              scroll='2m', per_page=100,
+              sort: Union[str, dict, list] = None,
+              fields: Sequence[str] = ('date', 'title', 'url'),
+              queries: Union[str, list, dict] = None,
+              filters: Dict[str, Union[str, list, dict]] = None):
+        body = dict(filters=filters, queries=queries, fields=fields, sort=sort,
+                scroll=scroll, per_page=per_page)
+        body = {k: v for (k, v) in body.items() if v is not None}
+        print(body)
+        while True:
+            r = self.post("query", index=index, json=body, ignore_status=[404])
+            if r.status_code == 404:
+                break
+            d = r.json()
+            yield from d['results']
+            body['scroll_id'] = d['meta']['scroll_id']
+
+    def create_index(self, index: str, guest_role: Optional[str] = None):
+        body = {"name": index}
         if guest_role:
             body['guest_role'] = guest_role
-        url = f"{self.host}/index/"
-        r = requests.post(url, json=body, auth=(self.username, self.password))
-        r.raise_for_status()
-        return r.json()
+        return self.post("index/", json=body).json()
 
-    def check_index(self, name) -> Optional[dict]:
-        url = f"{self.host}/index/{name}"
-        r = requests.get(url, auth=(self.username, self.password))
+    def check_index(self, index: str) -> Optional[dict]:
+        r = self.get(index=index, ignore_status=[404])
         if r.status_code == 404:
             return None
-        r.raise_for_status()
         return r.json()
 
-    def delete_index(self, name:str) -> bool:
-        url = f"{self.host}/index/{name}"
-        r = requests.delete(url, auth=(self.username, self.password))
-        if r.status_code == 404:
-            return False
-        r.raise_for_status()
-        return True
+    def delete_index(self, index: str) -> bool:
+        r = self.delete(index=index, ignore_status=[404])
+        return r.status_code != 404
 
-    def upload_documents(self, index: str, articles, columns=None):
-        url = f"{self.host}/index/{index}/documents"
+    def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None):
         body = {"documents": articles}
         if columns:
             body['columns'] = columns
-        r = requests.post(url, json=body, auth=(self.username, self.password))
-        r.raise_for_status()
-        return r.json()
+        return self.post("documents", index=index, json=body)
 
     def update_document(self, index:str, doc_id, body):
-        url = f"{self.host}/index/{index}/documents/{doc_id}"
-        r = requests.put(url, json=body, auth=(self.username, self.password))
-        r.raise_for_status()
+        self.put(f"documents/{doc_id}", index, json=body)
 
-    def set_columns(self, index: str, body):
-        url = f"{self.host}/index/{index}/fields"
-        r = requests.post(url, json=body, auth=(self.username, self.password))
-        r.raise_for_status()
+    def delete_document(self, index:str, doc_id):
+        self.delete(f"documents/{doc_id}", index)
+
+    def set_fields(self, index: str, body):
+        self.post("fields", index, json=body)
+
+    def get_fields(self, index: str):
+        return self.get("fields", index).json()

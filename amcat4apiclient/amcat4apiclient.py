@@ -111,10 +111,13 @@ class AmcatClient:
             body['columns'] = columns
         return self.post("documents", index=index, json=body)
 
-    def update_document(self, index:str, doc_id, body):
+    def update_document(self, index: str, doc_id, body):
         self.put(f"documents/{doc_id}", index, json=body)
 
-    def delete_document(self, index:str, doc_id):
+    def get_document(self, index: str, doc_id):
+        return self.get(f"documents/{doc_id}", index).json()
+
+    def delete_document(self, index: str, doc_id):
         self.delete(f"documents/{doc_id}", index)
 
     def set_fields(self, index: str, body):

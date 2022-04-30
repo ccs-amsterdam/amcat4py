@@ -2,47 +2,47 @@ from typing import List, Iterable, Optional, Union, Dict, Sequence
 
 import requests
 
+
 class AmcatClient:
     def __init__(self, host, username, password):
         self.host = host
         self.username = username
-        self.password = password
+        self.token = self.get_token(password)
+
+    def get_token(self, password) -> str:
+        r = requests.post(self.url("auth/token"), data=dict(username=self.username, password=password))
+        r.raise_for_status()
+        return r.json()["access_token"]
 
     def url(self, url=None, index=None):
         url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
         return "/".join(url_parts)
 
-    def get(self, url=None, index=None, params=None, ignore_status=None):
-        # TODO: Use token based auth
-        r = requests.get(self.url(url, index), params=params, auth=(self.username, self.password))
+    def request(self, method, url=None, ignore_status=None, **kargs):
+        headers = {'Authorization': f"Bearer {self.token}"}
+        r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             r.raise_for_status()
         return r
+
+    def get(self, url=None, index=None, params=None, ignore_status=None):
+        return self.request("get", url=self.url(url, index), params=params, ignore_status=ignore_status)
 
     def post(self, url=None, index=None, json=None, ignore_status=None):
-        r = requests.post(self.url(url, index), json=json, auth=(self.username, self.password))
-        if not (ignore_status and r.status_code in ignore_status):
-            r.raise_for_status()
-        return r
+        return self.request("post", url=self.url(url, index), json=json, ignore_status=ignore_status)
 
     def put(self, url=None, index=None, json=None, ignore_status=None):
-        r = requests.put(self.url(url, index), json=json, auth=(self.username, self.password))
-        if not (ignore_status and r.status_code in ignore_status):
-            r.raise_for_status()
-        return r
+        return self.request("put", url=self.url(url, index), json=json, ignore_status=ignore_status)
 
     def delete(self, url=None, index=None, ignore_status=None):
-        r = requests.delete(self.url(url, index), auth=(self.username, self.password))
-        if not (ignore_status and r.status_code in ignore_status):
-            r.raise_for_status()
-        return r
+        return self.request("delete", url=self.url(url, index), ignore_status=ignore_status)
 
     def list_indices(self) -> List[dict]:
         """
         List all indices on this server
         :return: a list of index dicts with keys name and (your) role
         """
-        return self.get("/index/").json()
+        return self.get("index/").json()
 
     def documents(self, index: str, q: Optional[str]= None, *,
                   fields=('date', 'title', 'url'), scroll='2m', per_page=100, **params) -> Iterable[dict]:

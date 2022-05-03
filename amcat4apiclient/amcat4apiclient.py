@@ -1,7 +1,7 @@
 from typing import List, Iterable, Optional, Union, Dict, Sequence
 
 import requests
-import json
+from json import dumps
 from datetime import datetime, date, time
 
 
@@ -30,8 +30,10 @@ class AmcatClient:
         url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
         return "/".join(url_parts)
 
-    def request(self, method, url=None, ignore_status=None, **kargs):
-        headers = {'Authorization': f"Bearer {self.token}"}
+    def request(self, method, url=None, ignore_status=None, headers=None, **kargs):
+        if headers is None:
+            headers = {}
+        headers['Authorization']= f"Bearer {self.token}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             r.raise_for_status()
@@ -41,7 +43,14 @@ class AmcatClient:
         return self.request("get", url=self.url(url, index), params=params, ignore_status=ignore_status)
 
     def post(self, url=None, index=None, json=None, ignore_status=None):
-        return self.request("post", url=self.url(url, index), json=json, ignore_status=ignore_status)
+        if json:
+            data = dumps(json, default=serialize)
+            headers={'Content-Type': 'application/json'}
+        else:
+            data = None
+            headers={}
+
+        return self.request("post", url=self.url(url, index), data=data, headers=headers, ignore_status=ignore_status)
 
     def put(self, url=None, index=None, json=None, ignore_status=None):
         return self.request("put", url=self.url(url, index), json=json, ignore_status=ignore_status)
@@ -121,7 +130,6 @@ class AmcatClient:
         body = {"documents": articles}
         if columns:
             body['columns'] = columns
-        body = json.dumps(body, default=serialize)
         return self.post("documents", index=index, json=body)
 
     def update_document(self, index: str, doc_id, body):

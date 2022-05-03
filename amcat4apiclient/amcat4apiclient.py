@@ -3,6 +3,17 @@ from typing import List, Iterable, Optional, Union, Dict, Sequence
 import requests
 
 
+def serialize(obj):
+    """JSON serializer that accepts datetime & date"""
+    from datetime import datetime, date, time
+    if isinstance(obj, date) and not isinstance(obj, datetime):
+        obj = datetime.combine(obj, time.min)
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, set):
+        return sorted(obj)
+
+
 class AmcatClient:
     def __init__(self, host, username, password):
         self.host = host
@@ -109,6 +120,7 @@ class AmcatClient:
         body = {"documents": articles}
         if columns:
             body['columns'] = columns
+        body = json.dumps(body, default=serialize)
         return self.post("documents", index=index, json=body)
 
     def update_document(self, index: str, doc_id, body):

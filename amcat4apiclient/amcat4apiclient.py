@@ -108,7 +108,6 @@ class AmcatClient:
         body = dict(filters=filters, queries=queries, fields=fields, sort=sort,
                 scroll=scroll, per_page=per_page)
         body = {k: v for (k, v) in body.items() if v is not None}
-        print(body)
         while True:
             r = self.post("query", index=index, json=body, ignore_status=[404])
             if r.status_code == 404:

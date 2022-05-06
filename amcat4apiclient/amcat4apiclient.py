@@ -1,8 +1,10 @@
+import logging
+from datetime import datetime, date, time
+from json import dumps
 from typing import List, Iterable, Optional, Union, Dict, Sequence
 
 import requests
-from json import dumps
-from datetime import datetime, date, time
+from requests import HTTPError
 
 
 def serialize(obj):
@@ -36,7 +38,12 @@ class AmcatClient:
         headers['Authorization']= f"Bearer {self.token}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
-            r.raise_for_status()
+            try:
+                r.raise_for_status()
+            except HTTPError:
+                if r.text:
+                    logging.error(f"Response body: {r.text}")
+                raise
         return r
 
     def get(self, url=None, index=None, params=None, ignore_status=None):
@@ -45,10 +52,10 @@ class AmcatClient:
     def post(self, url=None, index=None, json=None, ignore_status=None):
         if json:
             data = dumps(json, default=serialize)
-            headers={'Content-Type': 'application/json'}
+            headers = {'Content-Type': 'application/json'}
         else:
             data = None
-            headers={}
+            headers = {}
 
         return self.request("post", url=self.url(url, index), data=data, headers=headers, ignore_status=ignore_status)
 

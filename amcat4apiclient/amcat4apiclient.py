@@ -18,10 +18,11 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host, username, password):
+    def __init__(self, host, username, password, ignore_tz=True):
         self.host = host
         self.username = username
         self.token = self.get_token(password)
+        self.ignore_tz = ignore_tz
 
     def get_token(self, password) -> str:
         r = requests.post(self.url("auth/token"), data=dict(username=self.username, password=password))
@@ -104,7 +105,8 @@ class AmcatClient:
               sort: Union[str, dict, list] = None,
               fields: Sequence[str] = ('date', 'title', 'url'),
               queries: Union[str, list, dict] = None,
-              filters: Dict[str, Union[str, list, dict]] = None):
+              filters: Dict[str, Union[str, list, dict]] = None,
+              date_fields: Sequence[str] = ('date',)):
         body = dict(filters=filters, queries=queries, fields=fields, sort=sort,
                 scroll=scroll, per_page=per_page)
         body = {k: v for (k, v) in body.items() if v is not None}
@@ -113,7 +115,12 @@ class AmcatClient:
             if r.status_code == 404:
                 break
             d = r.json()
-            yield from d['results']
+            for res in d['results']:
+                for date_field in date_fields:
+                    if res.get(date_field):
+                        date = res[date_field][:10] if self.ignore_tz else res[date_field]
+                        res[date_field] = datetime.fromisoformat(date)
+                yield res
             body['scroll_id'] = d['meta']['scroll_id']
 
     def create_index(self, index: str, guest_role: Optional[str] = None):

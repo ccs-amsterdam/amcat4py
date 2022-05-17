@@ -3,8 +3,10 @@ AmCAT4 API Client for Python
 """
 
 import argparse
+import logging
 
 from amcat4apiclient import AmcatClient
+from amcat4apiclient.copy_index import copy_documents
 
 
 def index_list(client: AmcatClient, _args):
@@ -20,10 +22,16 @@ def index_delete(client: AmcatClient, args):
     client.delete_index(args.name)
 
 
+def index_copy(client: AmcatClient, args):
+    ignore_fields = args.ignore_fields and args.ignore_fields.split(",")
+    copy_documents(client, args.src, client, args.dest, ignore_fields)
+
+
 def run_action(args):
     client = AmcatClient(args.host, args.username, args.password)
     args.func(client, args)
 
+logging.basicConfig(format='[%(levelname)-7s:%(name)-15s] %(message)s', level=logging.INFO)
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--host", default="http://localhost:5000")
@@ -39,5 +47,11 @@ p.set_defaults(func=index_create)
 p = subparsers.add_parser('delete', help='Delete index')
 p.add_argument("name", help="Index to delete")
 p.set_defaults(func=index_delete)
+
+p = subparsers.add_parser('copy', help='Copy index')
+p.add_argument("src", help="Index to copy from")
+p.add_argument("dest", help="Index to copy to")
+p.add_argument("--ignore-fields", help="Comma separated list of fields to ignore")
+p.set_defaults(func=index_copy)
 
 run_action(parser.parse_args())

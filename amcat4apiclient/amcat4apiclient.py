@@ -6,7 +6,6 @@ from typing import List, Iterable, Optional, Union, Dict, Sequence
 import requests
 from requests import HTTPError
 
-
 def serialize(obj):
     """JSON serializer that accepts datetime & date"""
     if isinstance(obj, date) and not isinstance(obj, datetime):
@@ -25,18 +24,32 @@ class AmcatClient:
         self.ignore_tz = ignore_tz
 
     def get_token(self, password) -> str:
-        r = requests.post(self.url("auth/token"), data=dict(username=self.username, password=password))
+        r = requests.post(self.url("auth/token"),
+                          data=dict(username=self.username, password=password))
         r.raise_for_status()
         return r.json()["access_token"]
 
+    @staticmethod
+    def _chunks(items: Iterable, chunk_size=100) -> Iterable[List]:
+        """ utility method for uploading documents in batches """
+        buffer = []
+        for item in items:
+            buffer.append(item)
+            if len(buffer) > chunk_size:
+                yield buffer
+                buffer = []
+        if buffer:
+            yield buffer
+
     def url(self, url=None, index=None):
-        url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
+        url_parts = [self.host] + (["index", index]
+                                   if index else []) + ([url] if url else [])
         return "/".join(url_parts)
 
     def request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
-        headers['Authorization']= f"Bearer {self.token}"
+        headers['Authorization'] = f"Bearer {self.token}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             try:
@@ -73,7 +86,7 @@ class AmcatClient:
         """
         return self.get("index/").json()
 
-    def documents(self, index: str, q: Optional[str]= None, *,
+    def documents(self, index: str, q: Optional[str] = None, *,
                   fields=('date', 'title', 'url'), scroll='2m', per_page=100, **params) -> Iterable[dict]:
         """
         Perform a query on this server, scrolling over the results to get all hits
@@ -93,7 +106,8 @@ class AmcatClient:
         if q:
             params['q'] = q
         while True:
-            r = self.get("documents", index=index, params=params, ignore_status=[404])
+            r = self.get("documents", index=index,
+                         params=params, ignore_status=[404])
             if r.status_code == 404:
                 break
             d = r.json()
@@ -108,7 +122,7 @@ class AmcatClient:
               filters: Dict[str, Union[str, list, dict]] = None,
               date_fields: Sequence[str] = ('date',)):
         body = dict(filters=filters, queries=queries, fields=fields, sort=sort,
-                scroll=scroll, per_page=per_page)
+                    scroll=scroll, per_page=per_page)
         body = {k: v for (k, v) in body.items() if v is not None}
         while True:
             r = self.post("query", index=index, json=body, ignore_status=[404])
@@ -139,11 +153,39 @@ class AmcatClient:
         r = self.delete(index=index, ignore_status=[404])
         return r.status_code != 404
 
-    def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None):
-        body = {"documents": articles}
+    def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None, chunk_size=100, show_progress=False) -> list:
+        """
+        Upload documents to the server. First argument is the name of the index where the new documents should be inserted.
+        Second argument is an iterable (e.g., a list) of dictionaries. Each dictionary represents a single document.
+        Required keys are: `title`, `text`, `date`, and `url`.
+        You can optionally specify the column types with a dictionary.
+        By default, the articles are uploaded in chunks of 100 documents. You can adjust this accordingly.
+        For larger uploads, you have the option to show a progress bar (make sure tqdm is installed).
+
+        :param index: The name of the index
+        :param articles: Documents to upload (a list of dictionaries)
+        :param columns: an optional dictionary of field types. 
+        :param chunk_size: number of documents to upload per batch (default: 100)
+        :param show_progress: show a progress bar when uploading documents (default: False)
+        :return: a list of document ids (as assigned by the AmCAT server)
+        """
+        body = {}
+        ids = []
         if columns:
             body['columns'] = columns
-        return self.post("documents", index=index, json=body)
+
+        if show_progress:
+            from tqdm import tqdm
+            import math
+            generator = tqdm(self._chunks(articles, chunk_size=chunk_size),
+                             total=math.ceil(len(articles) / chunk_size), unit="chunks")
+        else:
+            generator = self._chunks(articles, chunk_size=chunk_size)
+        for chunk in generator:
+            body = {"documents": chunk}
+            r = self.post("documents", index=index, json=body)
+            ids += r.json()
+        return ids
 
     def update_document(self, index: str, doc_id, body):
         self.put(f"documents/{doc_id}", index, json=body)

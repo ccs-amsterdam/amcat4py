@@ -17,17 +17,16 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host, username, password, ignore_tz=True):
+    def __init__(self, host, username=None, password=None, ignore_tz=True):
         self.host = host
         self.username = username
-        self.token = self.get_token(password)
+        self.password = password
         self.ignore_tz = ignore_tz
 
-    def get_token(self, password) -> str:
-        r = requests.post(self.url("auth/token"),
-                          data=dict(username=self.username, password=password))
-        r.raise_for_status()
-        return r.json()["access_token"]
+    def get_token(self) -> str:
+        _get_token(self.host, self.username, self.password)
+
+
 
     @staticmethod
     def _chunks(items: Iterable, chunk_size=100) -> Iterable[List]:
@@ -49,7 +48,8 @@ class AmcatClient:
     def request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
-        headers['Authorization'] = f"Bearer {self.token}"
+        token = get_token(self.host)
+        headers['Authorization'] = f"Bearer {token}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             try:

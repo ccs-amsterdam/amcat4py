@@ -23,8 +23,7 @@ class AmcatClient:
         self.username = username
         self.password = password
         self.ignore_tz = ignore_tz
-
-    def get_token(self) -> str:
+        # run at init to cache token
         _get_token(self.host, self.username, self.password)
 
     @staticmethod
@@ -47,7 +46,7 @@ class AmcatClient:
     def request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
-        token = _get_token(self)
+        token = _get_token(self.host, self.username, self.password)
         headers['Authorization'] = f"Bearer {token}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):

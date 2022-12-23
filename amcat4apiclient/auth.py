@@ -42,9 +42,9 @@ def get_middlecat_token(host, callback_port=65432, refresh = "static"):
     browse(authorization_url)
 
     # wait for get request with code
-    print('Waiting for authorization in browser...')
+    print("Waiting for authorization in browser...")
     conn, addr = s.accept()
-    conn.sendall(b'Authentication complete. Please close this page and return to Python.')
+    conn.sendall(b"Authentication complete. Please close this page and return to Python.")
 
     data = conn.recv(1024).decode()
     code = search(r"code=([^&\s]+)", data).group(1)
@@ -58,8 +58,9 @@ def get_middlecat_token(host, callback_port=65432, refresh = "static"):
     r.raise_for_status()
     token = r.json()
     expires_at = timedelta(seconds=token["expires_in"]) + datetime.now()
-    token["expires_at"] = expires_at.strftime('%Y-%m-%dT%H:%M:%S')
-    del token['expires_in']
+    token["expires_at"] = expires_at.strftime("%Y-%m-%dT%H:%M:%S")
+    del token["expires_in"]
+    cache_token(token, host)
     return token
 
 def token_refresh(token, host):
@@ -75,17 +76,21 @@ def token_refresh(token, host):
     }
     headers={"Accept": "application/json", "Content-Type": "application/json"}
     r = requests.post(token_url, headers=headers, data=dumps(auth_params))
+    r.raise_for_status()
     token = r.json()
     expires_at = timedelta(seconds=token["expires_in"]) + datetime.now()
-    token["expires_at"] = expires_at.strftime('%Y-%m-%dT%H:%M:%S')
-    del token['expires_in']
+    token["expires_at"] = expires_at.strftime("%Y-%m-%dT%H:%M:%S")
+    del token["expires_in"]
+    cache_token(token, host)
     return token
 
 def get_password_token(host, username, password):
-    r = requests.post(f"{host}auth/token",
+    r = requests.post(f"{host}/auth/token",
                       data=dict(username=username, password=password))
     r.raise_for_status()
-    return r.json()
+    token = r.json()
+    cache_token(token, host)
+    return token
 
 
 def _get_token(host, username=None, password=None):
@@ -97,13 +102,13 @@ def _get_token(host, username=None, password=None):
         if username is None or password is None:
             token = get_middlecat_token(host)
         else:
-            token = get_password_token(username, password)
-    return check_token(token)
+            token = get_password_token(host, username, password)
+    return check_token(token, host)["access_token"]
 
-def check_token(token):
+def check_token(token, host):
     if "expires_at" in token:
-        if datetime.now() + timedelta(seconds=10) > datetime.strptime(token["expires_at"], '%Y-%m-%dT%H:%M:%S'):
-            token = token_refresh(token)
+        if datetime.now() + timedelta(seconds=10) > datetime.strptime(token["expires_at"], "%Y-%m-%dT%H:%M:%S"):
+            token = token_refresh(token, host)
     return token
 
 
@@ -119,12 +124,12 @@ def secret_write(x, path, host):
         os.makedirs(dir_path)
     fernet = Fernet(make_key(host))
     data = fernet.encrypt(dumps(x).encode())
-    with open(path, 'wb') as f:
+    with open(path, "wb") as f:
         f.write(data)
 
 
 def secret_read(path, host):
-    with open(path, 'rb') as f:
+    with open(path, "rb") as f:
         token_enc = f.read()
     fernet = Fernet(make_key(host))
     return loads(fernet.decrypt(token_enc).decode())
@@ -143,13 +148,13 @@ def make_key(key):
 def base64_url_encode(x):
 
     # Encode x in base64
-    x = b64encode(x).decode('utf-8')
+    x = b64encode(x).decode("utf-8")
 
     # Remove trailing equals signs
-    x = x.rstrip('=')
+    x = x.rstrip("=")
 
     # Replace + with - and / with _
-    x = x.replace('+', '-').replace('/', '_')
+    x = x.replace("+", "-").replace("/", "_")
 
     return x
 
@@ -157,13 +162,13 @@ def base64_url_encode(x):
 def pkce_challange():
 
     # Generate random 32-octet sequence
-    verifier = getrandbits(256).to_bytes(32, byteorder='big')
+    verifier = getrandbits(256).to_bytes(32, byteorder="big")
 
     # Encode the verifier in base64
     verifier = base64_url_encode(verifier)
 
     # Hash the verifier using the SHA-256 algorithm
-    challenge = sha256(verifier.encode('utf-8')).digest()
+    challenge = sha256(verifier.encode("utf-8")).digest()
 
     # Encode the challenge in base64
     challenge = base64_url_encode(challenge)

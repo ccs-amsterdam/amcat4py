@@ -5,6 +5,7 @@ from typing import List, Iterable, Optional, Union, Dict, Sequence
 
 import requests
 from requests import HTTPError
+from amcat4apiclient.auth import _get_token    
 
 def serialize(obj):
     """JSON serializer that accepts datetime & date"""
@@ -26,8 +27,6 @@ class AmcatClient:
     def get_token(self) -> str:
         _get_token(self.host, self.username, self.password)
 
-
-
     @staticmethod
     def _chunks(items: Iterable, chunk_size=100) -> Iterable[List]:
         """ utility method for uploading documents in batches """
@@ -48,7 +47,7 @@ class AmcatClient:
     def request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
-        token = get_token(self.host)
+        token = _get_token(self)
         headers['Authorization'] = f"Bearer {token}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):

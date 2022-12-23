@@ -1,3 +1,13 @@
+appdirs
+base64
+cryptography
+datetime
+hashlib
+json
+random
+re
 requests
 requests_oauthlib
+socket
 tqdm
+webbrowser

@@ -39,12 +39,12 @@ class AmcatClient:
         if buffer:
             yield buffer
 
-    def url(self, url=None, index=None):
+    def _url(self, url=None, index=None):
         url_parts = [self.host] + (["index", index]
                                    if index else []) + ([url] if url else [])
         return "/".join(url_parts)
 
-    def request(self, method, url=None, ignore_status=None, headers=None, **kargs):
+    def _request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
         token = _check_token(self.token, self.host)["access_token"]
@@ -59,10 +59,10 @@ class AmcatClient:
                 raise
         return r
 
-    def get(self, url=None, index=None, params=None, ignore_status=None):
-        return self.request("get", url=self.url(url, index), params=params, ignore_status=ignore_status)
+    def _get(self, url=None, index=None, params=None, ignore_status=None):
+        return self._request("get", url=self._url(url, index), params=params, ignore_status=ignore_status)
 
-    def post(self, url=None, index=None, json=None, ignore_status=None):
+    def _post(self, url=None, index=None, json=None, ignore_status=None):
         if json:
             data = dumps(json, default=serialize)
             headers = {'Content-Type': 'application/json'}
@@ -70,20 +70,20 @@ class AmcatClient:
             data = None
             headers = {}
 
-        return self.request("post", url=self.url(url, index), data=data, headers=headers, ignore_status=ignore_status)
+        return self._request("post", url=self._url(url, index), data=data, headers=headers, ignore_status=ignore_status)
 
-    def put(self, url=None, index=None, json=None, ignore_status=None):
-        return self.request("put", url=self.url(url, index), json=json, ignore_status=ignore_status)
+    def _put(self, url=None, index=None, json=None, ignore_status=None):
+        return self._request("put", url=self._url(url, index), json=json, ignore_status=ignore_status)
 
-    def delete(self, url=None, index=None, ignore_status=None):
-        return self.request("delete", url=self.url(url, index), ignore_status=ignore_status)
+    def _delete(self, url=None, index=None, ignore_status=None):
+        return self._request("delete", url=self._url(url, index), ignore_status=ignore_status)
 
     def list_indices(self) -> List[dict]:
         """
         List all indices on this server
         :return: a list of index dicts with keys name and (your) role
         """
-        return self.get("index/").json()
+        return self._get("index/").json()
 
     def documents(self, index: str, q: Optional[str] = None, *,
                   fields=('date', 'title', 'url'), scroll='2m', per_page=100, **params) -> Iterable[dict]:
@@ -105,7 +105,7 @@ class AmcatClient:
         if q:
             params['q'] = q
         while True:
-            r = self.get("documents", index=index,
+            r = self._get("documents", index=index,
                          params=params, ignore_status=[404])
             if r.status_code == 404:
                 break
@@ -124,7 +124,7 @@ class AmcatClient:
                     scroll=scroll, per_page=per_page)
         body = {k: v for (k, v) in body.items() if v is not None}
         while True:
-            r = self.post("query", index=index, json=body, ignore_status=[404])
+            r = self._post("query", index=index, json=body, ignore_status=[404])
             if r.status_code == 404:
                 break
             d = r.json()
@@ -140,18 +140,17 @@ class AmcatClient:
         body = {"name": index}
         if guest_role:
             body['guest_role'] = guest_role
-        return self.post("index/", json=body).json()
+        return self._post("index/", json=body).json()
 
     def check_index(self, index: str) -> Optional[dict]:
-        r = self.get(index=index, ignore_status=[404])
+        r = self._get(index=index, ignore_status=[404])
         if r.status_code == 404:
             return None
         return r.json()
 
     def delete_index(self, index: str) -> bool:
-        r = self.delete(index=index, ignore_status=[404])
+        r = self._delete(index=index, ignore_status=[404])
         return r.status_code != 404
-
 
     def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None, chunk_size=100, show_progress=False) -> list:
         """
@@ -183,21 +182,21 @@ class AmcatClient:
             generator = self._chunks(articles, chunk_size=chunk_size)
         for chunk in generator:
             body = {"documents": chunk}
-            r = self.post("documents", index=index, json=body)
+            r = self._post("documents", index=index, json=body)
             ids += r.json()
         return ids
 
     def update_document(self, index: str, doc_id, body):
-        self.put(f"documents/{doc_id}", index, json=body)
+        self._put(f"documents/{doc_id}", index, json=body)
 
     def get_document(self, index: str, doc_id):
-        return self.get(f"documents/{doc_id}", index).json()
+        return self._get(f"documents/{doc_id}", index).json()
 
     def delete_document(self, index: str, doc_id):
-        self.delete(f"documents/{doc_id}", index)
+        self._delete(f"documents/{doc_id}", index)
 
     def set_fields(self, index: str, body):
-        self.post("fields", index, json=body)
+        self._post("fields", index, json=body)
 
     def get_fields(self, index: str):
-        return self.get("fields", index).json()
+        return self._get("fields", index).json()

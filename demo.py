@@ -1,7 +1,7 @@
 import json
 from amcat4apiclient.amcat4apiclient import AmcatClient
 
-amcat = AmcatClient("http://localhost/api", "admin", "supergeheim")
+amcat = AmcatClient("http://localhost:5000", "admin", "supergeheim")
 
 indices = amcat.list_indices()
 for index in indices:
@@ -41,3 +41,10 @@ amcat.get_fields("new_index")
 
 # delete index
 amcat.delete_index("new_index")
+
+# index user management
+amcat.list_index_users("state_of_the_union")
+amcat.create_user(email="test@example.com", password="supergeheim2")
+amcat.add_index_user("state_of_the_union", email="test@example.com", role="reader")
+amcat.modify_index_user("state_of_the_union", email="test@example.com", role="metareader")
+amcat.delete_index_user("state_of_the_union", email="test@example.com")

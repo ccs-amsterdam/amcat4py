@@ -84,6 +84,12 @@ class AmcatClient:
         :return: a list of index dicts with keys name and (your) role
         """
         return self._get("index/").json()
+    
+    def list_index_users(self, index: str) -> List[dict]:
+        """
+        List users and their roles in an index
+        """
+        return self._get(f"index/{index}/users").json()
 
     def documents(self, index: str, q: Optional[str] = None, *,
                   fields=('date', 'title', 'url'), scroll='2m', per_page=100, **params) -> Iterable[dict]:
@@ -141,6 +147,46 @@ class AmcatClient:
         if guest_role:
             body['guest_role'] = guest_role
         return self._post("index/", json=body).json()
+    
+    def create_user(self, email, password, global_role=None, index_access=None, credentials=None):
+        """
+        Create a new user (superfluous after refactor_nodb/Jan 6, 2023)
+        :param email: Email address of the new user to add
+        :param password: new password for the user
+        :param global_role: global role of the user ("writer" or "admin")
+        :param index_access: index to grant access to for the new user
+        :param credentials: The credentials to use. If not given, uses last login information
+        """
+        body = {
+            "email": email, 
+            "password": password, 
+            "global_role": global_role,
+            "index_access": index_access
+        }
+        return self._post("users/", json=body).json()
+    
+    def add_index_user(self, index: str, email: str, role: str):
+        """
+        add new user to an index
+        :param index: name of the index
+        :param email: Email address of the user to add
+        :param role: role of the user for this index. One of "admin", "writer", "reader" "metareader".
+        """
+        body = {
+          "email": email,
+          "role": role.upper()
+        }
+        return self._post(f"index/{index}/users", json=body).json()
+    
+    def modify_index_user(self, index: str, email: str, role: str):
+        """
+        modify user role for index
+        :param index: name of the index
+        :param email: The email of an (existing) user
+        :param role: role of the user for this index. One of "admin", "writer", "reader" "metareader".
+        """
+        body = {"role": role.upper()}
+        return self._put(f"index/{index}/users/{email}", json=body).json()
 
     def check_index(self, index: str) -> Optional[dict]:
         r = self._get(index=index, ignore_status=[404])
@@ -150,6 +196,15 @@ class AmcatClient:
 
     def delete_index(self, index: str) -> bool:
         r = self._delete(index=index, ignore_status=[404])
+        return r.status_code != 404
+    
+    def delete_index_user(self, index: str, email: str) -> bool:
+        """
+        delete user from an index
+        :param index: name of the index
+        :param email: The email of an (existing) user
+        """
+        r = self._delete(f"index/{index}/users/{email}", ignore_status=[404])
         return r.status_code != 404
 
     def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None, chunk_size=100, show_progress=False) -> list:

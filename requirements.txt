@@ -1,2 +1,7 @@
+appdirs
+cryptography
+datetime
+hashlib
 requests
+requests_oauthlib
 tqdm

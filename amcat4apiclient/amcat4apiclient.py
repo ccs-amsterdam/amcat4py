@@ -5,6 +5,8 @@ from typing import List, Iterable, Optional, Union, Dict, Sequence
 
 import requests
 from requests import HTTPError
+from amcat4apiclient.auth import _get_token, _check_token
+
 
 def serialize(obj):
     """JSON serializer that accepts datetime & date"""
@@ -17,17 +19,13 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host, username, password, ignore_tz=True):
+    def __init__(self, host, username=None, password=None, force_refresh=False, ignore_tz=True):
         self.host = host
         self.username = username
-        self.token = self.get_token(password)
+        self.password = password
         self.ignore_tz = ignore_tz
-
-    def get_token(self, password) -> str:
-        r = requests.post(self.url("auth/token"),
-                          data=dict(username=self.username, password=password))
-        r.raise_for_status()
-        return r.json()["access_token"]
+        # run at init to cache token
+        self.token = _get_token(self.host, self.username, self.password, force_refresh)
 
     @staticmethod
     def _chunks(items: Iterable, chunk_size=100) -> Iterable[List]:
@@ -49,7 +47,8 @@ class AmcatClient:
     def request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
-        headers['Authorization'] = f"Bearer {self.token}"
+        token = _check_token(self.token, self.host)["access_token"]
+        headers['Authorization'] = f"Bearer {token}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             try:
@@ -153,6 +152,7 @@ class AmcatClient:
         r = self.delete(index=index, ignore_status=[404])
         return r.status_code != 404
 
+
     def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None, chunk_size=100, show_progress=False) -> list:
         """
         Upload documents to the server. First argument is the name of the index where the new documents should be inserted.
@@ -164,7 +164,7 @@ class AmcatClient:
 
         :param index: The name of the index
         :param articles: Documents to upload (a list of dictionaries)
-        :param columns: an optional dictionary of field types. 
+        :param columns: an optional dictionary of field types.
         :param chunk_size: number of documents to upload per batch (default: 100)
         :param show_progress: show a progress bar when uploading documents (default: False)
         :return: a list of document ids (as assigned by the AmCAT server)

@@ -18,6 +18,8 @@ setup(
         "Topic :: Text Processing",
     ],
     install_requires=[
-        "requests"
+        "requests",
+        "appdirs",
+        "cryptography"
     ],
 )

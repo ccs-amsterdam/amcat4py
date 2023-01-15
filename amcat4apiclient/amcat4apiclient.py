@@ -207,7 +207,7 @@ class AmcatClient:
         r = self._delete(f"index/{index}/users/{email}", ignore_status=[404])
         return r.status_code != 404
 
-    def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None, chunk_size=100, show_progress=False) -> list:
+    def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None, chunk_size=100, show_progress=False) -> None:
         """
         Upload documents to the server. First argument is the name of the index where the new documents should be inserted.
         Second argument is an iterable (e.g., a list) of dictionaries. Each dictionary represents a single document.
@@ -221,10 +221,8 @@ class AmcatClient:
         :param columns: an optional dictionary of field types.
         :param chunk_size: number of documents to upload per batch (default: 100)
         :param show_progress: show a progress bar when uploading documents (default: False)
-        :return: a list of document ids (as assigned by the AmCAT server)
         """
         body = {}
-        ids = []
         if columns:
             body['columns'] = columns
 
@@ -238,8 +236,6 @@ class AmcatClient:
         for chunk in generator:
             body = {"documents": chunk}
             r = self._post("documents", index=index, json=body)
-            ids += r.json()
-        return ids
 
     def update_document(self, index: str, doc_id, body):
         self._put(f"documents/{doc_id}", index, json=body)

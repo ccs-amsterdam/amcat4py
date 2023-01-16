@@ -69,8 +69,8 @@ def get_middlecat_token(host, callback_port=65432, refresh="static"):
     oauth = OAuth2Session(client_id="amcat4apiclient", redirect_uri=f"http://localhost:{callback_port}/")
 
     authorization_url, state = oauth.authorization_url(auth_url, **auth_params)
-
     browse(authorization_url)
+    print("Waiting for authorization in browser...")
     conn, addr = s.accept()
 
     conn.sendall(FELINE_RESPONSE.encode("ascii"))
@@ -86,6 +86,7 @@ def get_middlecat_token(host, callback_port=65432, refresh="static"):
 
     r.raise_for_status()
     token = r.json()
+
     expires_at = timedelta(seconds=token["expires_in"]) + datetime.now()
     token["expires_at"] = expires_at.strftime("%Y-%m-%dT%H:%M:%S")
     del token["expires_in"]
@@ -114,6 +115,7 @@ def token_refresh(token, host):
     r.raise_for_status()
     token = r.json()
     expires_at = timedelta(seconds=token["expires_in"]) + datetime.now()
+
     token["expires_at"] = expires_at.strftime("%Y-%m-%dT%H:%M:%S")
     del token["expires_in"]
     cache_token(token, host)

@@ -47,8 +47,8 @@ class AmcatClient:
     def _request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
-        token = _check_token(self.token, self.host)["access_token"]
-        headers['Authorization'] = f"Bearer {token}"
+        self.token = _check_token(self.token, self.host)
+        headers['Authorization'] = f"Bearer {self.token['access_token']}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             try:

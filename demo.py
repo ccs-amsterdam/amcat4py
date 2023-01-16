@@ -1,4 +1,4 @@
-import json
+import pprint
 from amcat4apiclient.amcat4apiclient import AmcatClient
 
 amcat = AmcatClient("http://localhost:5000", "admin", "supergeheim")
@@ -11,8 +11,8 @@ for index in indices:
 sotu = list(amcat.query("state_of_the_union", fields=None))
 print(len(sotu))
 for k, v in sotu[1].items():
-      print(k + "(" + str(type(v)) + "): " + str(v)[0:100] + "...")
-      
+    print(k + "(" + str(type(v)) + "): " + str(v)[0:100] + "...")
+
 # add new document
 new_doc = {
   "title": "test",
@@ -25,14 +25,13 @@ new_doc = {
 }
 amcat.upload_documents("state_of_the_union", [new_doc])
 
-import pprint
 pp = pprint.PrettyPrinter(depth=4)
-res=list(amcat.query("state_of_the_union", fields=None, filters={"title": "test"}))
+res = list(amcat.query("state_of_the_union", fields=None, filters={"title": "test"}))
 pp.pprint(res)
 
 # check/set fields of an index
 amcat.get_fields("state_of_the_union")
-amcat.set_fields("state_of_the_union", {"keyword":"keyword"})
+amcat.set_fields("state_of_the_union", {"keyword": "keyword"})
 
 # create index
 amcat.create_index(index="new_index", guest_role="admin")

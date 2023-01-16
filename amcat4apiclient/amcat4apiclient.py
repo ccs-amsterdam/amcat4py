@@ -84,7 +84,7 @@ class AmcatClient:
         :return: a list of index dicts with keys name and (your) role
         """
         return self._get("index/").json()
-    
+
     def list_index_users(self, index: str) -> List[dict]:
         """
         List users and their roles in an index
@@ -111,8 +111,7 @@ class AmcatClient:
         if q:
             params['q'] = q
         while True:
-            r = self._get("documents", index=index,
-                         params=params, ignore_status=[404])
+            r = self._get("documents", index=index, params=params, ignore_status=[404])
             if r.status_code == 404:
                 break
             d = r.json()
@@ -147,7 +146,7 @@ class AmcatClient:
         if guest_role:
             body['guest_role'] = guest_role
         return self._post("index/", json=body).json()
-    
+
     def create_user(self, email, password, global_role=None, index_access=None, credentials=None):
         """
         Create a new user (superfluous after refactor_nodb/Jan 6, 2023)
@@ -158,13 +157,13 @@ class AmcatClient:
         :param credentials: The credentials to use. If not given, uses last login information
         """
         body = {
-            "email": email, 
-            "password": password, 
+            "email": email,
+            "password": password,
             "global_role": global_role,
             "index_access": index_access
         }
         return self._post("users/", json=body).json()
-    
+
     def add_index_user(self, index: str, email: str, role: str):
         """
         add new user to an index
@@ -177,7 +176,7 @@ class AmcatClient:
           "role": role.upper()
         }
         return self._post(f"index/{index}/users", json=body).json()
-    
+
     def modify_index_user(self, index: str, email: str, role: str):
         """
         modify user role for index
@@ -188,8 +187,8 @@ class AmcatClient:
         body = {"role": role.upper()}
         return self._put(f"index/{index}/users/{email}", json=body).json()
 
-    def check_index(self, index: str) -> Optional[dict]:
-        r = self._get(index=index, ignore_status=[404])
+    def check_index(self, ix: str) -> Optional[dict]:
+        r = self._get(index=ix, ignore_status=[404])
         if r.status_code == 404:
             return None
         return r.json()
@@ -197,7 +196,7 @@ class AmcatClient:
     def delete_index(self, index: str) -> bool:
         r = self._delete(index=index, ignore_status=[404])
         return r.status_code != 404
-    
+
     def delete_index_user(self, index: str, email: str) -> bool:
         """
         delete user from an index
@@ -207,7 +206,8 @@ class AmcatClient:
         r = self._delete(f"index/{index}/users/{email}", ignore_status=[404])
         return r.status_code != 404
 
-    def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None, chunk_size=100, show_progress=False) -> None:
+    def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None,
+                         chunk_size=100, show_progress=False) -> None:
         """
         Upload documents to the server. First argument is the name of the index where the new documents should be inserted.
         Second argument is an iterable (e.g., a list) of dictionaries. Each dictionary represents a single document.
@@ -235,7 +235,7 @@ class AmcatClient:
             generator = self._chunks(articles, chunk_size=chunk_size)
         for chunk in generator:
             body = {"documents": chunk}
-            r = self._post("documents", index=index, json=body)
+            self._post("documents", index=index, json=body)
 
     def update_document(self, index: str, doc_id, body):
         self._put(f"documents/{doc_id}", index, json=body)

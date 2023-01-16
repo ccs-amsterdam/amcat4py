@@ -1,3 +1,5 @@
+import logging
+
 import requests
 import os
 from appdirs import user_cache_dir
@@ -13,6 +15,23 @@ from requests_oauthlib import OAuth2Session
 from socket import socket, AF_INET, SOCK_STREAM
 from webbrowser import open as browse
 
+FELINE_RESPONSE = """HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+
+<html><body><pre>Authorization complete, you can close this tab and return to Python.
+ ,_     _
+ |\\\\_,-~/
+ / _  _ |    ,--.
+(  @  @ )   / ,-'
+ \\  _T_/-._( (
+ /         `. \\
+|         _  \\ |
+ \\ \\ ,  /      |
+  || |-_\\__   /
+ ((_/`(____,-'
+</pre></body></html>
+"""
+
 
 def get_middlecat_token(host, callback_port=65432, refresh="static"):
     """
@@ -21,6 +40,19 @@ def get_middlecat_token(host, callback_port=65432, refresh="static"):
     :param callback_port: Port used to receive the token. The only reason to change this is if the port is already in use.
     :param refresh: Either "refresh" or "static" to en-/disable token rotation.
     """
+    # we open a socket and browser for for the interactive authentication and wait for the code from middlecat
+    # We do this first so we can change the port if needed
+    s = socket(AF_INET, SOCK_STREAM)
+    while True:
+        try:
+            s.bind(("127.0.0.1", callback_port))
+        except OSError:
+            logging.info(f"Port {callback_port} already in use, trying {callback_port-1}")
+            callback_port -= 1
+        else:
+            break
+    s.listen()
+
     middlecat = requests.get(f"{host}/middlecat").json()["middlecat_url"]
     auth_url = f"{middlecat}/authorize"
     token_url = f"{middlecat}/api/token"
@@ -28,7 +60,7 @@ def get_middlecat_token(host, callback_port=65432, refresh="static"):
 
     auth_params = {
         "resource": host,
-        "refresh": refresh,
+        "refresh_mode": refresh,
         "session_type": "api_key",
         "code_challenge_method": pkce["method"],
         "code_challenge": pkce["challenge"]
@@ -38,15 +70,10 @@ def get_middlecat_token(host, callback_port=65432, refresh="static"):
 
     authorization_url, state = oauth.authorization_url(auth_url, **auth_params)
 
-    # we open a socket and browser for for the interactive authentication and wait for the code from middlecat
-    s = socket(AF_INET, SOCK_STREAM)
-    s.bind(("127.0.0.1", callback_port))
-    s.listen()
-
     browse(authorization_url)
-    print("Waiting for authorization in browser...")
     conn, addr = s.accept()
-    conn.sendall(b"Authentication complete. Please close this page and return to Python.")
+
+    conn.sendall(FELINE_RESPONSE.encode("ascii"))
 
     data = conn.recv(1024).decode()
     code = search(r"code=([^&\s]+)", data).group(1)

@@ -20,6 +20,8 @@ setup(
     install_requires=[
         "requests",
         "appdirs",
-        "cryptography"
+        "cryptography",
+        "requests_oauthlib",
+        "tqdm",
     ],
 )

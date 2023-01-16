@@ -31,6 +31,7 @@ def run_action(args):
     client = AmcatClient(args.host, args.username, args.password)
     args.func(client, args)
 
+
 logging.basicConfig(format='[%(levelname)-7s:%(name)-15s] %(message)s', level=logging.INFO)
 
 parser = argparse.ArgumentParser(description=__doc__)

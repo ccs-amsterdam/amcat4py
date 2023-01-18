@@ -82,16 +82,7 @@ def get_middlecat_token(host, callback_port=65432, refresh="static"):
     # using the received code, make a request to get the actual token
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
     params = {"grant_type": "authorization_code", "code": code, "code_verifier": pkce["verifier"], "state": state}
-    r = requests.post(token_url, headers=headers, data=dumps(params))
-
-    r.raise_for_status()
-    token = r.json()
-
-    expires_at = timedelta(seconds=token["expires_in"]) + datetime.now()
-    token["expires_at"] = expires_at.strftime("%Y-%m-%dT%H:%M:%S")
-    del token["expires_in"]
-    cache_token(token, host)
-    return token
+    return _request_token(params, headers, host, token_url)
 
 
 def token_refresh(token, host):
@@ -102,7 +93,7 @@ def token_refresh(token, host):
     """
     middlecat = requests.get(f"{host}/middlecat").json()["middlecat_url"]
     token_url = f"{middlecat}/api/token"
-    auth_params = {
+    params = {
         "resource": host,
         "grant_type": "refresh_token",
         "refresh_mode": token["refresh_rotate"],
@@ -111,33 +102,21 @@ def token_refresh(token, host):
         "client_id": "amcat4apiclient"
     }
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    return _request_token(params, headers, host, token_url)
+
+
+def _request_token(auth_params, headers, host, token_url):
     r = requests.post(token_url, headers=headers, data=dumps(auth_params))
     r.raise_for_status()
     token = r.json()
     expires_at = timedelta(seconds=token["expires_in"]) + datetime.now()
-
     token["expires_at"] = expires_at.strftime("%Y-%m-%dT%H:%M:%S")
     del token["expires_in"]
     cache_token(token, host)
     return token
 
 
-def get_password_token(host, username, password):
-    """
-    The old/alternative route to receive a token, i.e. via a username and password.
-    :param host: The URL to the AmCAT instance (e.g. "http://localhost/api").
-    :param username: username, usually and email address
-    :param password: usern password
-    """
-    r = requests.post(f"{host}/auth/token",
-                      data=dict(username=username, password=password))
-    r.raise_for_status()
-    token = r.json()
-    cache_token(token, host)
-    return token
-
-
-def _get_token(host, username=None, password=None, force_refresh=False):
+def _get_token(host, force_refresh=False):
     """
     Returns refreshed token if old token has expired
     :param host: The URL to the AmCAT instance (e.g. "http://localhost/api").
@@ -149,10 +128,7 @@ def _get_token(host, username=None, password=None, force_refresh=False):
     if os.path.exists(file_path) and not force_refresh:
         token = secret_read(file_path, host)
     else:
-        if username is None or password is None:
-            token = get_middlecat_token(host)
-        else:
-            token = get_password_token(host, username, password)
+        token = get_middlecat_token(host)
     return _check_token(token, host)
 
 

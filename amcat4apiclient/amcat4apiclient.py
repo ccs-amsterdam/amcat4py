@@ -19,13 +19,19 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host, username=None, password=None, force_refresh=False, ignore_tz=True):
+    def __init__(self, host, force_refresh=False, ignore_tz=True):
         self.host = host
-        self.username = username
-        self.password = password
         self.ignore_tz = ignore_tz
-        # run at init to cache token
-        self.token = _get_token(self.host, self.username, self.password, force_refresh)
+        self.server_config = self.get_server_config()
+        if self.server_config['require_authorization']:
+            self.token = _get_token(self.host, force_refresh=force_refresh)
+        else:
+            self.token = None
+
+    def get_server_config(self):
+        r = requests.get(self._url("config"))
+        r.raise_for_status()
+        return r.json()
 
     @staticmethod
     def _chunks(items: Iterable, chunk_size=100) -> Iterable[List]:
@@ -40,15 +46,15 @@ class AmcatClient:
             yield buffer
 
     def _url(self, url=None, index=None):
-        url_parts = [self.host] + (["index", index]
-                                   if index else []) + ([url] if url else [])
+        url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
         return "/".join(url_parts)
 
     def _request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
-        self.token = _check_token(self.token, self.host)
-        headers['Authorization'] = f"Bearer {self.token['access_token']}"
+        if self.token is not None:
+            self.token = _check_token(self.token, self.host)
+            headers['Authorization'] = f"Bearer {self.token['access_token']}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             try:

@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, Sequence, Iterable, List
 
-from amcat4apiclient import AmcatClient
+from amcat4py import AmcatClient
 
 
 def chunks(items: Iterable, chunk_size=100) -> Iterable[List]:

@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 import requests
 import os
@@ -14,6 +15,8 @@ from re import search
 from requests_oauthlib import OAuth2Session
 from socket import socket, AF_INET, SOCK_STREAM
 from webbrowser import open as browse
+
+CLIENT_ID = "amcat4py"
 
 FELINE_RESPONSE = """HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
@@ -33,7 +36,7 @@ Content-Type: text/html; charset=utf-8
 """
 
 
-def get_middlecat_token(host, callback_port=65432, refresh="static"):
+def get_middlecat_token(host, callback_port=65432, refresh="static") -> dict:
     """
     Authenticate to an AmCAT instance using a middlecat instance (which is automatically retrieved from the AmCAT instance)
     :param host: The URL to the AmCAT instance (e.g. "http://localhost/api")
@@ -66,7 +69,7 @@ def get_middlecat_token(host, callback_port=65432, refresh="static"):
         "code_challenge": pkce["challenge"]
     }
 
-    oauth = OAuth2Session(client_id="amcat4apiclient", redirect_uri=f"http://localhost:{callback_port}/")
+    oauth = OAuth2Session(client_id=CLIENT_ID, redirect_uri=f"http://localhost:{callback_port}/")
 
     authorization_url, state = oauth.authorization_url(auth_url, **auth_params)
     browse(authorization_url)
@@ -85,7 +88,7 @@ def get_middlecat_token(host, callback_port=65432, refresh="static"):
     return _request_token(params, headers, host, token_url)
 
 
-def token_refresh(token, host):
+def token_refresh(token, host) -> dict:
     """
     Usually called by _check_token if token has expired
     :param token: old token
@@ -99,13 +102,13 @@ def token_refresh(token, host):
         "refresh_mode": token["refresh_rotate"],
         "session_type": "api_key",
         "refresh_token": token["refresh_token"],
-        "client_id": "amcat4apiclient"
+        "client_id": CLIENT_ID
     }
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
     return _request_token(params, headers, host, token_url)
 
 
-def _request_token(auth_params, headers, host, token_url):
+def _request_token(auth_params, headers, host, token_url) -> dict:
     r = requests.post(token_url, headers=headers, data=dumps(auth_params))
     r.raise_for_status()
     token = r.json()
@@ -116,7 +119,7 @@ def _request_token(auth_params, headers, host, token_url):
     return token
 
 
-def _get_token(host, force_refresh=False):
+def _get_token(host, force_refresh=False, login_if_needed=True) -> Optional[dict]:
     """
     Returns refreshed token if old token has expired
     :param host: The URL to the AmCAT instance (e.g. "http://localhost/api").
@@ -124,15 +127,17 @@ def _get_token(host, force_refresh=False):
         instead of get_middlecat_token()
     :param force_refresh: when True, overwrites the cached token and creates a new one
     """
-    file_path = user_cache_dir("amcat4apiclient") + "/" + sha256(host.encode()).hexdigest()
+    file_path = user_cache_dir(CLIENT_ID) + "/" + sha256(host.encode()).hexdigest()
     if os.path.exists(file_path) and not force_refresh:
         token = secret_read(file_path, host)
-    else:
+    elif login_if_needed:
         token = get_middlecat_token(host)
+    else:
+        return None
     return _check_token(token, host)
 
 
-def _check_token(token, host):
+def _check_token(token, host) -> dict:
     """
     Returns refreshed token if old token has expired
     :param token: old token
@@ -144,13 +149,13 @@ def _check_token(token, host):
     return token
 
 
-def cache_token(token, host):
+def cache_token(token, host) -> None:
     """
     Caches encrypted token on disk
     :param token: old token
     :param host: The URL to the AmCAT instance (e.g. "http://localhost/api").
     """
-    file_path = user_cache_dir("amcat4apiclient") + "/" + sha256(host.encode()).hexdigest()
+    file_path = user_cache_dir(CLIENT_ID) + "/" + sha256(host.encode()).hexdigest()
     dir_path = os.path.dirname(file_path)
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -160,10 +165,10 @@ def cache_token(token, host):
         f.write(data)
 
 
-def secret_read(path, host):
+def secret_read(path, host) -> dict:
     """
     Reads encrypted token from disk
-    :param path: path to file, usually in user_cache_dir("amcat4apiclient")
+    :param path: path to file, usually in user_cache_dir(CLIENT_ID)
     :param host: The URL to the AmCAT instance (e.g. "http://localhost/api").
     """
     with open(path, "rb") as f:
@@ -172,7 +177,7 @@ def secret_read(path, host):
     return loads(fernet.decrypt(token_enc).decode())
 
 
-def make_key(key):
+def make_key(key) -> bytes:
     """
     Helper function to make key for encryption of tokens
     :param key: string that is turned into key.
@@ -186,7 +191,7 @@ def make_key(key):
     return urlsafe_b64encode(kdf.derive(key.encode()))
 
 
-def base64_url_encode(x):
+def base64_url_encode(x) -> str:
     """
     Custom base64 encode for pkce challange nicked from httr2
     https://github.com/r-lib/httr2/blob/main/R/utils.R
@@ -199,7 +204,7 @@ def base64_url_encode(x):
     return x
 
 
-def pkce_challange():
+def pkce_challange() -> dict:
     """
     Generates PKCE code challange for middlecat requests
     :param x: string to be encoded.

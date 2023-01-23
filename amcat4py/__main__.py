@@ -5,8 +5,8 @@ AmCAT4 API Client for Python
 import argparse
 import logging
 
-from amcat4apiclient import AmcatClient
-from amcat4apiclient.copy_index import copy_documents
+from amcat4py import AmcatClient
+from amcat4py.copy_index import copy_documents
 
 
 def index_list(client: AmcatClient, _args):

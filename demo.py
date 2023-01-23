@@ -1,7 +1,10 @@
 import pprint
-from amcat4apiclient.amcat4apiclient import AmcatClient
+from amcat4py import AmcatClient
+from amcat4py.amcatclient import AmcatError
 
-amcat = AmcatClient("http://localhost:5000", "admin", "supergeheim")
+amcat = AmcatClient("http://localhost:5000")
+if amcat.login_required():
+    amcat.login()
 
 indices = amcat.list_indices()
 for index in indices:
@@ -29,21 +32,30 @@ pp = pprint.PrettyPrinter(depth=4)
 res = list(amcat.query("state_of_the_union", fields=None, filters={"title": "test"}))
 pp.pprint(res)
 
-# check/set fields of an index
-amcat.get_fields("state_of_the_union")
+print("\n** check/set fields of an index **")
 amcat.set_fields("state_of_the_union", {"keyword": "keyword"})
+fields = amcat.get_fields("state_of_the_union")
+pp.pprint(fields)
 
-# create index
+print("\n** create index **")
 amcat.create_index(index="new_index", guest_role="admin")
-amcat.list_indices()
+indexes = amcat.list_indices()
+pp.pprint(indexes)
 amcat.get_fields("new_index")
 
-# delete index
+print("\n** delete index **")
 amcat.delete_index("new_index")
+indexes = amcat.list_indices()
+pp.pprint(indexes)
 
-# index user management
-amcat.list_index_users("state_of_the_union")
-amcat.create_user(email="test@example.com", password="supergeheim2")
-amcat.add_index_user("state_of_the_union", email="test@example.com", role="reader")
-amcat.modify_index_user("state_of_the_union", email="test@example.com", role="metareader")
-amcat.delete_index_user("state_of_the_union", email="test@example.com")
+print("\n** index user management **")
+try:
+    amcat.create_user(email="test@amcat.nl")
+except AmcatError as e:
+    print("Error:",  e.message)
+amcat.add_index_user("state_of_the_union", email="test@amcat.nl", role="reader")
+users = amcat.list_index_users("state_of_the_union")
+pp.pprint(users)
+amcat.modify_index_user("state_of_the_union", email="test@amcat.nl", role="metareader")
+amcat.delete_index_user("state_of_the_union", email="test@amcat.nl")
+amcat.delete_user("test@amcat.nl")

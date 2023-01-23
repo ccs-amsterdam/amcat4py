@@ -1,11 +1,27 @@
-import logging
 from datetime import datetime, date, time
 from json import dumps
 from typing import List, Iterable, Optional, Union, Dict, Sequence
 
 import requests
-from requests import HTTPError
-from amcat4apiclient.auth import _get_token, _check_token
+from requests import HTTPError, RequestException, Response, JSONDecodeError
+from .auth import _get_token, _check_token
+
+
+class AmcatError(HTTPError):
+    """Superclass for errors originating from AmCAT API with a better message / string representation"""
+    def __init__(self, response, request, **kargs):
+        super().__init__(response=response, request=request, **kargs)
+        if self.response is not None:
+            try:
+                d = self.response.json()
+                self.message = d["detail"] if "detail" in d else repr(d)
+            except JSONDecodeError:
+                self.message = self.response.text
+        else:
+            self.message = f"HTTPError {self.response}"
+
+    def __str__(self):
+        return f"Error from server ({self.response.status_code}): {self.message}"
 
 
 def serialize(obj):
@@ -19,14 +35,18 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host, force_refresh=False, ignore_tz=True):
+    def __init__(self, host, ignore_tz=True):
         self.host = host
         self.ignore_tz = ignore_tz
         self.server_config = self.get_server_config()
-        if self.server_config['require_authorization']:
-            self.token = _get_token(self.host, force_refresh=force_refresh)
-        else:
-            self.token = None
+        # If we have a token cached, load it. Otherwise, only log in if explicitly requested
+        self.token = _get_token(self.host, login_if_needed=False)
+
+    def login(self, force_refresh=False):
+        self.token = _get_token(self.host, force_refresh=force_refresh)
+
+    def login_required(self):
+        return self.server_config['authorization'] in ('_authenticated_guests', 'authorized_users_only')
 
     def get_server_config(self):
         r = requests.get(self._url("config"))
@@ -52,17 +72,18 @@ class AmcatClient:
     def _request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
-        if self.token is not None:
+        if self.token is None:
+            if self.login_required():
+                raise Exception("This server requires a user to be authenticated. Please call .login() first")
+        else:
             self.token = _check_token(self.token, self.host)
             headers['Authorization'] = f"Bearer {self.token['access_token']}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             try:
                 r.raise_for_status()
-            except HTTPError:
-                if r.text:
-                    logging.error(f"Response body: {r.text}")
-                raise
+            except HTTPError as e:
+                raise AmcatError(e.response, e.request) from e
         return r
 
     def _get(self, url=None, index=None, params=None, ignore_status=None):
@@ -153,22 +174,24 @@ class AmcatClient:
             body['guest_role'] = guest_role
         return self._post("index/", json=body).json()
 
-    def create_user(self, email, password, global_role=None, index_access=None, credentials=None):
+    def create_user(self, email, global_role=None):
         """
-        Create a new user (superfluous after refactor_nodb/Jan 6, 2023)
+        Create a new user
         :param email: Email address of the new user to add
-        :param password: new password for the user
         :param global_role: global role of the user ("writer" or "admin")
-        :param index_access: index to grant access to for the new user
-        :param credentials: The credentials to use. If not given, uses last login information
         """
         body = {
             "email": email,
-            "password": password,
             "global_role": global_role,
-            "index_access": index_access
         }
         return self._post("users/", json=body).json()
+
+    def delete_user(self, email):
+        """
+        Delete a user from the instance
+        :param email: Email address of the new user to add
+        """
+        self._delete(f"users/{email}")
 
     def add_index_user(self, index: str, email: str, role: str):
         """

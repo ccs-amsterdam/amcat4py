@@ -152,6 +152,19 @@ class AmcatClient:
               queries: Union[str, list, dict] = None,
               filters: Dict[str, Union[str, list, dict]] = None,
               date_fields: Sequence[str] = ('date',)):
+        """
+        Execute a search query on this server
+
+        :param index: The name of the index to search
+        :param scroll: type to keep scroll cursor alive
+        :param per_page: Number of results per page
+        :param sort: Sorting for the query
+        :param fields: A list of fields to retrieve (use None for all fields, '_id' for id only)
+        :param queries: One or more query strings or objects to search for
+        :param filters: A dictionary of filters to apply to the search
+        :param date_fields: A list of fields to treat as dates, which will be converted to datetime objects
+        :return: an iterator over the search results, with the requested (or all) fields
+        """
         body = dict(filters=filters, queries=queries, fields=fields, sort=sort,
                     scroll=scroll, per_page=per_page)
         body = {k: v for (k, v) in body.items() if v is not None}
@@ -167,6 +180,23 @@ class AmcatClient:
                         res[date_field] = datetime.fromisoformat(date)
                 yield res
             body['scroll_id'] = d['meta']['scroll_id']
+
+    def query_aggregate(self, 
+                        index: str, *,
+                        axes: Union[str, list, dict] = None,
+                        queries: Union[str, list, dict] = None,
+                        filters: Dict[str, Union[str, list, dict]] = None):
+        """
+        Execute a search query on this server and aggregate results
+
+        :param index: The name of the index to search
+        :param axes: The aggregation axes, e.g. [{"field": "publisher", [{"field": "date", "interval": "year"}]}]
+        :param queries: One or more query strings or objects to search for
+        :param filters: A dictionary of filters to apply to the search
+        :return: an iterator over the search results, with the requested (or all) fields
+        """
+        body = {"axes": axes, "queries": queries, "filters": filters}
+        return self._post(f"index/{index}/aggregate", json=body).json()['data']
 
     def create_index(self, index: str, guest_role: Optional[str] = None):
         body = {"name": index}

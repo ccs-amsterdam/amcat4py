@@ -2,7 +2,7 @@ import pprint
 from amcat4py import AmcatClient
 from amcat4py.amcatclient import AmcatError
 
-amcat = AmcatClient("http://localhost:5000")
+amcat = AmcatClient("http://localhost/amcat/")
 if amcat.login_required():
     amcat.login()
 
@@ -15,6 +15,14 @@ sotu = list(amcat.query("state_of_the_union", fields=None))
 print(len(sotu))
 for k, v in sotu[1].items():
     print(k + "(" + str(type(v)) + "): " + str(v)[0:100] + "...")
+
+# perform and aggregate query (counting the number of documents fitting the query + filter)
+amcat.query_aggregate("state_of_the_union",
+                axes = [{"field": "party", 
+                         "list": [{"field": "date", "interval": "year"}]}],
+                queries = ["war", "peace"],
+                filters = {"party": ["Democratic", "Republican"], 
+                           "date": {"gte": "1900-01-01"}})
 
 # add new document
 new_doc = {

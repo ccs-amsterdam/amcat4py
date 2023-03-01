@@ -56,7 +56,7 @@ def get_middlecat_token(host, callback_port=65432, refresh="static") -> dict:
             break
     s.listen()
 
-    middlecat = requests.get(f"{host}/middlecat").json()["middlecat_url"]
+    middlecat = requests.get(f"{host}/config").json()["middlecat_url"]
     auth_url = f"{middlecat}/authorize"
     token_url = f"{middlecat}/api/token"
     pkce = pkce_challange()

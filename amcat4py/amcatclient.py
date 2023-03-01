@@ -2,6 +2,7 @@ from datetime import datetime, date, time
 from json import dumps
 from typing import List, Iterable, Optional, Union, Dict, Sequence
 
+import logging
 import requests
 from requests import HTTPError, RequestException, Response, JSONDecodeError
 from .auth import _get_token, _check_token
@@ -51,7 +52,12 @@ class AmcatClient:
     def get_server_config(self):
         r = requests.get(self._url("config"))
         r.raise_for_status()
-        return r.json()
+        config = r.json()
+        if "warnings" in config:
+            for w in config["warnings"]:
+                if w:
+                    logging.warning(w)
+        return config
 
     @staticmethod
     def _chunks(items: Iterable, chunk_size=100) -> Iterable[List]:

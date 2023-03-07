@@ -56,7 +56,8 @@ amcat.delete_index("new_index")
 indexes = amcat.list_indices()
 pp.pprint(indexes)
 
-print("\n** index user management **")
+print("\n** user management **")
+pp.pprint(amcat.list_users())
 try:
     amcat.create_user(email="test@amcat.nl")
 except AmcatError as e:

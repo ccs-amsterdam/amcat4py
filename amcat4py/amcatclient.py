@@ -118,6 +118,12 @@ class AmcatClient:
         """
         return self._get("index/").json()
 
+    def list_users(self) -> List[dict]:
+        """
+        List users and their global roles
+        """
+        return self._get("users").json()
+
     def list_index_users(self, index: str) -> List[dict]:
         """
         List users and their roles in an index

@@ -263,8 +263,13 @@ class AmcatClient:
         if r.status_code == 404:
             return None
         return r.json()
+    
+    def refresh_index(self, ix: str) -> None:
+        """Refresh (flush) this index"""
+        self._get(f"index/{ix}/refresh")
 
     def delete_index(self, index: str) -> bool:
+        """Delete this index"""
         r = self._delete(index=index, ignore_status=[404])
         return r.status_code != 404
 

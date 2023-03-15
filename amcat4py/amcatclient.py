@@ -278,12 +278,13 @@ class AmcatClient:
         return r.status_code != 404
 
     def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None,
-                         chunk_size=100, show_progress=False) -> None:
+                         chunk_size=100, show_progress=False, allow_unknown_fields=False) -> None:
         """
         Upload documents to the server. First argument is the name of the index where the new documents should be inserted.
         Second argument is an iterable (e.g., a list) of dictionaries. Each dictionary represents a single document.
         Required keys are: `title`, `text`, `date`, and `url`.
         You can optionally specify the column types with a dictionary.
+        If the articles contain unknown fields, a ValueError is raised unless allow_unknown_fields is set to True.
         By default, the articles are uploaded in chunks of 100 documents. You can adjust this accordingly.
         For larger uploads, you have the option to show a progress bar (make sure tqdm is installed).
 
@@ -292,11 +293,15 @@ class AmcatClient:
         :param columns: an optional dictionary of field types.
         :param chunk_size: number of documents to upload per batch (default: 100)
         :param show_progress: show a progress bar when uploading documents (default: False)
+        :param allow_new_fields: if set, documents with unknown fields are allowed (default: False)
         """
         body = {}
         if columns:
             body['columns'] = columns
-
+        if not allow_unknown_fields:
+            known_fields = set(self.get_fields(index).keys())
+            if columns:
+                known_fields |= set(columns.keys())
         if show_progress:
             from tqdm import tqdm
             import math
@@ -305,6 +310,10 @@ class AmcatClient:
         else:
             generator = self._chunks(articles, chunk_size=chunk_size)
         for chunk in generator:
+            if not allow_unknown_fields:
+                for doc in chunk:
+                    if unknown := (set(doc.keys()) - known_fields):
+                        raise ValueError(f"Document contained unknown fields: {unknown}")
             body = {"documents": chunk}
             self._post("documents", index=index, json=body)
 
@@ -320,5 +329,5 @@ class AmcatClient:
     def set_fields(self, index: str, body):
         self._post("fields", index, json=body)
 
-    def get_fields(self, index: str):
+    def get_fields(self, index: str) -> dict:
         return self._get("fields", index).json()

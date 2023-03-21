@@ -81,7 +81,7 @@ class AmcatClient:
         if self.token is None:
             if self.login_required():
                 raise Exception("This server requires a user to be authenticated. Please call .login() first")
-        else:
+        elif self.login_required():
             self.token = _check_token(self.token, self.host)
             headers['Authorization'] = f"Bearer {self.token['access_token']}"
         r = requests.request(method, url, headers=headers, **kargs)

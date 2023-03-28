@@ -81,7 +81,7 @@ class AmcatClient:
         if self.token is None:
             if self.login_required():
                 raise Exception("This server requires a user to be authenticated. Please call .login() first")
-        elif self.login_required():
+        else:
             self.token = _check_token(self.token, self.host)
             headers['Authorization'] = f"Bearer {self.token['access_token']}"
         r = requests.request(method, url, headers=headers, **kargs)
@@ -110,6 +110,14 @@ class AmcatClient:
 
     def _delete(self, url=None, index=None, ignore_status=None):
         return self._request("delete", url=self._url(url, index), ignore_status=ignore_status)
+
+    def get_user(self, user: str = 'me'):
+        """Get information on the given user, or on self if no user is given
+
+        Args:
+            user (string, optional): Username (email) to get information on. Defaults to 'me'.
+        """
+        return self._get(f"users/{user}")
 
     def list_indices(self) -> List[dict]:
         """
@@ -193,7 +201,7 @@ class AmcatClient:
                 yield res
             body['scroll_id'] = d['meta']['scroll_id']
 
-    def query_aggregate(self, 
+    def query_aggregate(self,
                         index: str, *,
                         axes: Union[str, list, dict] = None,
                         queries: Union[str, list, dict] = None,
@@ -263,7 +271,7 @@ class AmcatClient:
         if r.status_code == 404:
             return None
         return r.json()
-    
+
     def refresh_index(self, ix: str) -> None:
         """Refresh (flush) this index"""
         self._get(f"index/{ix}/refresh")

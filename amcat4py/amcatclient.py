@@ -218,10 +218,13 @@ class AmcatClient:
         body = {"axes": axes, "queries": queries, "filters": filters}
         return self._post(f"index/{index}/aggregate", json=body).json()['data']
 
-    def create_index(self, index: str, guest_role: Optional[str] = None):
-        body = {"name": index}
+    def create_index(self, index: str, name: str = None, description: str = None, guest_role: Optional[str] = None):
+        body = {"id": index,
+                "name": name or index}
         if guest_role:
             body['guest_role'] = guest_role
+        if description:
+            body['description'] = description
         return self._post("index/", json=body).json()
 
     def create_user(self, email, global_role=None):

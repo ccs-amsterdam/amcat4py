@@ -227,15 +227,15 @@ class AmcatClient:
             body['description'] = description
         return self._post("index/", json=body).json()
 
-    def create_user(self, email, global_role=None):
+    def create_user(self, email, role=None):
         """
         Create a new user
         :param email: Email address of the new user to add
-        :param global_role: global role of the user ("writer" or "admin")
+        :param role: global role of the user ("writer" or "admin")
         """
         body = {
             "email": email,
-            "global_role": global_role,
+            "role": role,
         }
         return self._post("users/", json=body).json()
 

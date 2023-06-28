@@ -6,6 +6,7 @@ import os
 from appdirs import user_cache_dir
 from base64 import urlsafe_b64encode, b64encode
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -183,7 +184,7 @@ def make_key(key) -> bytes:
     :param key: string that is turned into key.
     """
     kdf = PBKDF2HMAC(
-        algorithm=sha256(),
+        algorithm=hashes.SHA256(),
         length=32,
         salt="supergeheim".encode(),
         iterations=5,

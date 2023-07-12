@@ -51,6 +51,11 @@ indexes = amcat.list_indices()
 pp.pprint(indexes)
 amcat.get_fields("new_index")
 
+print("\n** modify index **")
+amcat.modify_index(index="new_index", name="A New Index", guest_role="admin")
+indexes = amcat.list_indices()
+pp.pprint(indexes)
+
 print("\n** delete index **")
 amcat.delete_index("new_index")
 indexes = amcat.list_indices()

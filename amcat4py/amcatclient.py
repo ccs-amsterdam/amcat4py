@@ -219,6 +219,26 @@ class AmcatClient:
         return self._post(f"index/{index}/aggregate", json=body).json()['data']
 
     def create_index(self, index: str, name: str = None, description: str = None, guest_role: Optional[str] = None):
+        """
+        Create an index
+
+        Parameters:
+            index (str): Short name of the index to create (follows naming conventions of Elasticsearch, see details).
+            name (str, optional): Optional more descriptive name of the index to create (all characters are allowed here).
+            description (str, optional): Optional description of the index to create.
+            guest_role (str, optional): Role for unauthorized users. Options are "admin", "writer", "reader", and "metareader".
+            credentials (Any, optional): The credentials to use. If not given, uses last login information.
+
+        Details:
+            The short name for the new index (`index` argument) must meet these criteria:
+
+            - Lowercase only
+            - Cannot include `\`, `/`, `*`, `?`, `"`, `<`, `>`, `|`, `:`, ` `(space), `,` (comma), `#`
+            - Cannot start with -, _, +
+            - Cannot be `.` or `..`
+            - Cannot be longer than 255 characters (note that some symbols like emojis take up two characters)
+            - If names start with ., the index will be hidden and non-accessible
+        """
         body = {"id": index,
                 "name": name or index}
         if guest_role:
@@ -226,6 +246,20 @@ class AmcatClient:
         if description:
             body['description'] = description
         return self._post("index/", json=body).json()
+
+    def modify_index(self, index: str, name: str = None, description: str = None, guest_role: Optional[str] = None):
+        """
+        Modify an index
+
+        for parameters see create_index
+        """
+        body = {"id": index,
+                "name": name or index}
+        if guest_role:
+            body['guest_role'] = guest_role
+        if description:
+            body['description'] = description
+        return self._put(f"index/{index}", json=body).json()   
 
     def create_user(self, email, role=None):
         """

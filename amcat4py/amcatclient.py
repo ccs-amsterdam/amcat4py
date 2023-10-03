@@ -5,7 +5,7 @@ from typing import List, Iterable, Optional, Union, Dict, Sequence
 import logging
 import requests
 from requests import HTTPError, RequestException, Response, JSONDecodeError
-from .auth import _get_token, _check_token
+from .auth import _get_token, _check_token, token_refresh
 
 
 class AmcatError(HTTPError):
@@ -36,12 +36,22 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host, ignore_tz=True):
+    def __init__(self, host: str, refresh_token:(dict|str)=None, ignore_tz=True):
+        """
+        :param host: The host name of the API endpoint to connect to
+        :param refresh_token: A refresh token 
+        :param ignore_tz: Do we ignore time zones when querying articles
+        """
         self.host = host
         self.ignore_tz = ignore_tz
         self.server_config = self.get_server_config()
         # If we have a token cached, load it. Otherwise, only log in if explicitly requested
-        self.token = _get_token(self.host, login_if_needed=False)
+        if refresh_token:
+            if isinstance(refresh_token, str):
+                refresh_token = dict(refresh_token=refresh_token, refresh_rotate=False)
+            self.token = token_refresh(refresh_token, host)
+        else:
+            self.token = _get_token(self.host, login_if_needed=False)
 
     def login(self, force_refresh=False):
         self.token = _get_token(self.host, force_refresh=force_refresh)

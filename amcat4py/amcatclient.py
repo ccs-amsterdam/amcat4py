@@ -4,19 +4,20 @@ from typing import List, Iterable, Optional, Union, Dict, Sequence
 
 import logging
 import requests
-from requests import HTTPError, RequestException, Response, JSONDecodeError
+from requests import HTTPError
 from .auth import _get_token, _check_token, token_refresh
 
 
 class AmcatError(HTTPError):
     """Superclass for errors originating from AmCAT API with a better message / string representation"""
+
     def __init__(self, response, request, **kargs):
         super().__init__(response=response, request=request, **kargs)
         if self.response is not None:
             try:
                 d = self.response.json()
                 self.message = d["detail"] if "detail" in d else repr(d)
-            except JSONDecodeError:
+            except ValueError:
                 self.message = self.response.text
         else:
             self.message = f"HTTPError {self.response}"
@@ -36,10 +37,10 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host: str, refresh_token:(dict|str)=None, ignore_tz=True):
+    def __init__(self, host: str, refresh_token: (dict | str) = None, ignore_tz=True):
         """
         :param host: The host name of the API endpoint to connect to
-        :param refresh_token: A refresh token 
+        :param refresh_token: A refresh token
         :param ignore_tz: Do we ignore time zones when querying articles
         """
         self.host = host
@@ -57,7 +58,10 @@ class AmcatClient:
         self.token = _get_token(self.host, force_refresh=force_refresh)
 
     def login_required(self):
-        return self.server_config['authorization'] in ('_authenticated_guests', 'authorized_users_only')
+        return self.server_config["authorization"] in (
+            "_authenticated_guests",
+            "authorized_users_only",
+        )
 
     def get_server_config(self):
         r = requests.get(self._url("config"))
@@ -71,7 +75,7 @@ class AmcatClient:
 
     @staticmethod
     def _chunks(items: Iterable, chunk_size=100) -> Iterable[List]:
-        """ utility method for uploading documents in batches """
+        """utility method for uploading documents in batches"""
         buffer = []
         for item in items:
             buffer.append(item)
@@ -82,7 +86,9 @@ class AmcatClient:
             yield buffer
 
     def _url(self, url=None, index=None):
-        url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
+        url_parts = (
+            [self.host] + (["index", index] if index else []) + ([url] if url else [])
+        )
         return "/".join(url_parts)
 
     def _request(self, method, url=None, ignore_status=None, headers=None, **kargs):
@@ -90,10 +96,12 @@ class AmcatClient:
             headers = {}
         if self.token is None:
             if self.login_required():
-                raise Exception("This server requires a user to be authenticated. Please call .login() first")
+                raise Exception(
+                    "This server requires a user to be authenticated. Please call .login() first"
+                )
         else:
             self.token = _check_token(self.token, self.host)
-            headers['Authorization'] = f"Bearer {self.token['access_token']}"
+            headers["Authorization"] = f"Bearer {self.token['access_token']}"
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             try:
@@ -103,25 +111,37 @@ class AmcatClient:
         return r
 
     def _get(self, url=None, index=None, params=None, ignore_status=None):
-        return self._request("get", url=self._url(url, index), params=params, ignore_status=ignore_status)
+        return self._request(
+            "get", url=self._url(url, index), params=params, ignore_status=ignore_status
+        )
 
     def _post(self, url=None, index=None, json=None, ignore_status=None):
         if json:
             data = dumps(json, default=serialize)
-            headers = {'Content-Type': 'application/json'}
+            headers = {"Content-Type": "application/json"}
         else:
             data = None
             headers = {}
 
-        return self._request("post", url=self._url(url, index), data=data, headers=headers, ignore_status=ignore_status)
+        return self._request(
+            "post",
+            url=self._url(url, index),
+            data=data,
+            headers=headers,
+            ignore_status=ignore_status,
+        )
 
     def _put(self, url=None, index=None, json=None, ignore_status=None):
-        return self._request("put", url=self._url(url, index), json=json, ignore_status=ignore_status)
+        return self._request(
+            "put", url=self._url(url, index), json=json, ignore_status=ignore_status
+        )
 
     def _delete(self, url=None, index=None, ignore_status=None):
-        return self._request("delete", url=self._url(url, index), ignore_status=ignore_status)
+        return self._request(
+            "delete", url=self._url(url, index), ignore_status=ignore_status
+        )
 
-    def get_user(self, user: str = 'me'):
+    def get_user(self, user: str = "me"):
         """Get information on the given user, or on self if no user is given
 
         Args:
@@ -148,8 +168,16 @@ class AmcatClient:
         """
         return self._get(f"index/{index}/users").json()
 
-    def documents(self, index: str, q: Optional[str] = None, *,
-                  fields=('date', 'title', 'url'), scroll='2m', per_page=100, **params) -> Iterable[dict]:
+    def documents(
+        self,
+        index: str,
+        q: Optional[str] = None,
+        *,
+        fields=("date", "title", "url"),
+        scroll="2m",
+        per_page=100,
+        **params,
+    ) -> Iterable[dict]:
         """
         Perform a query on this server, scrolling over the results to get all hits
 
@@ -161,27 +189,32 @@ class AmcatClient:
         :param params: Any other parameters passed as query arguments
         :return: an iterator over the found documents with the requested (or all) fields
         """
-        params['scroll'] = scroll
-        params['per_page'] = per_page
+        params["scroll"] = scroll
+        params["per_page"] = per_page
         if fields:
-            params['fields'] = ",".join(fields)
+            params["fields"] = ",".join(fields)
         if q:
-            params['q'] = q
+            params["q"] = q
         while True:
             r = self._get("documents", index=index, params=params, ignore_status=[404])
             if r.status_code == 404:
                 break
             d = r.json()
-            yield from d['results']
-            params['scroll_id'] = d['meta']['scroll_id']
+            yield from d["results"]
+            params["scroll_id"] = d["meta"]["scroll_id"]
 
-    def query(self, index: str, *,
-              scroll='2m', per_page=100,
-              sort: Union[str, dict, list] = None,
-              fields: Sequence[str] = ('date', 'title', 'url'),
-              queries: Union[str, list, dict] = None,
-              filters: Dict[str, Union[str, list, dict]] = None,
-              date_fields: Sequence[str] = ('date',)):
+    def query(
+        self,
+        index: str,
+        *,
+        scroll="2m",
+        per_page=100,
+        sort: Union[str, dict, list] = None,
+        fields: Sequence[str] = ("date", "title", "url"),
+        queries: Union[str, list, dict] = None,
+        filters: Dict[str, Union[str, list, dict]] = None,
+        date_fields: Sequence[str] = ("date",),
+    ):
         """
         Execute a search query on this server
 
@@ -195,27 +228,38 @@ class AmcatClient:
         :param date_fields: A list of fields to treat as dates, which will be converted to datetime objects
         :return: an iterator over the search results, with the requested (or all) fields
         """
-        body = dict(filters=filters, queries=queries, fields=fields, sort=sort,
-                    scroll=scroll, per_page=per_page)
+        body = dict(
+            filters=filters,
+            queries=queries,
+            fields=fields,
+            sort=sort,
+            scroll=scroll,
+            per_page=per_page,
+        )
         body = {k: v for (k, v) in body.items() if v is not None}
         while True:
             r = self._post("query", index=index, json=body, ignore_status=[404])
             if r.status_code == 404:
                 break
             d = r.json()
-            for res in d['results']:
+            for res in d["results"]:
                 for date_field in date_fields:
                     if res.get(date_field):
-                        date = res[date_field][:10] if self.ignore_tz else res[date_field]
+                        date = (
+                            res[date_field][:10] if self.ignore_tz else res[date_field]
+                        )
                         res[date_field] = datetime.fromisoformat(date)
                 yield res
-            body['scroll_id'] = d['meta']['scroll_id']
+            body["scroll_id"] = d["meta"]["scroll_id"]
 
-    def query_aggregate(self,
-                        index: str, *,
-                        axes: Union[str, list, dict] = None,
-                        queries: Union[str, list, dict] = None,
-                        filters: Dict[str, Union[str, list, dict]] = None):
+    def query_aggregate(
+        self,
+        index: str,
+        *,
+        axes: Union[str, list, dict] = None,
+        queries: Union[str, list, dict] = None,
+        filters: Dict[str, Union[str, list, dict]] = None,
+    ):
         """
         Execute a search query on this server and aggregate results
 
@@ -226,9 +270,15 @@ class AmcatClient:
         :return: an iterator over the search results, with the requested (or all) fields
         """
         body = {"axes": axes, "queries": queries, "filters": filters}
-        return self._post(f"index/{index}/aggregate", json=body).json()['data']
+        return self._post(f"index/{index}/aggregate", json=body).json()["data"]
 
-    def create_index(self, index: str, name: str = None, description: str = None, guest_role: Optional[str] = None):
+    def create_index(
+        self,
+        index: str,
+        name: str = None,
+        description: str = None,
+        guest_role: Optional[str] = None,
+    ):
         """
         Create an index
 
@@ -249,27 +299,31 @@ class AmcatClient:
             - Cannot be longer than 255 characters (note that some symbols like emojis take up two characters)
             - If names start with ., the index will be hidden and non-accessible
         """
-        body = {"id": index,
-                "name": name or index}
+        body = {"id": index, "name": name or index}
         if guest_role:
-            body['guest_role'] = guest_role
+            body["guest_role"] = guest_role
         if description:
-            body['description'] = description
+            body["description"] = description
         return self._post("index/", json=body).json()
 
-    def modify_index(self, index: str, name: str = None, description: str = None, guest_role: Optional[str] = None):
+    def modify_index(
+        self,
+        index: str,
+        name: str = None,
+        description: str = None,
+        guest_role: Optional[str] = None,
+    ):
         """
         Modify an index
 
         for parameters see create_index
         """
-        body = {"id": index,
-                "name": name or index}
+        body = {"id": index, "name": name or index}
         if guest_role:
-            body['guest_role'] = guest_role
+            body["guest_role"] = guest_role
         if description:
-            body['description'] = description
-        return self._put(f"index/{index}", json=body).json()   
+            body["description"] = description
+        return self._put(f"index/{index}", json=body).json()
 
     def create_user(self, email, role=None):
         """
@@ -297,10 +351,7 @@ class AmcatClient:
         :param email: Email address of the user to add
         :param role: role of the user for this index. One of "admin", "writer", "reader" "metareader".
         """
-        body = {
-          "email": email,
-          "role": role.upper()
-        }
+        body = {"email": email, "role": role.upper()}
         return self._post(f"index/{index}/users", json=body).json()
 
     def modify_index_user(self, index: str, email: str, role: str):
@@ -337,8 +388,15 @@ class AmcatClient:
         r = self._delete(f"index/{index}/users/{email}", ignore_status=[404])
         return r.status_code != 404
 
-    def upload_documents(self, index: str, articles: Iterable[dict], columns: dict = None,
-                         chunk_size=100, show_progress=False, allow_unknown_fields=False) -> None:
+    def upload_documents(
+        self,
+        index: str,
+        articles: Iterable[dict],
+        columns: dict = None,
+        chunk_size=100,
+        show_progress=False,
+        allow_unknown_fields=False,
+    ) -> None:
         """
         Upload documents to the server. First argument is the name of the index where the new documents should be inserted.
         Second argument is an iterable (e.g., a list) of dictionaries. Each dictionary represents a single document.
@@ -357,7 +415,7 @@ class AmcatClient:
         """
         body = {}
         if columns:
-            body['columns'] = columns
+            body["columns"] = columns
         if not allow_unknown_fields:
             known_fields = set(self.get_fields(index).keys())
             if columns:
@@ -365,15 +423,21 @@ class AmcatClient:
         if show_progress:
             from tqdm import tqdm
             import math
-            generator = tqdm(self._chunks(articles, chunk_size=chunk_size),
-                             total=math.ceil(len(articles) / chunk_size), unit="chunks")
+
+            generator = tqdm(
+                self._chunks(articles, chunk_size=chunk_size),
+                total=math.ceil(len(articles) / chunk_size),
+                unit="chunks",
+            )
         else:
             generator = self._chunks(articles, chunk_size=chunk_size)
         for chunk in generator:
             if not allow_unknown_fields:
                 for doc in chunk:
                     if unknown := (set(doc.keys()) - known_fields):
-                        raise ValueError(f"Document contained unknown fields: {unknown}")
+                        raise ValueError(
+                            f"Document contained unknown fields: {unknown}"
+                        )
             body = {"documents": chunk}
             self._post("documents", index=index, json=body)
 

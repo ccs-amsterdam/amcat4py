@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name="amcat4py",
-    version="4.0.14",
+    version="4.0.15",
     description="Python client for AmCAT4 API",
     author="Wouter van Atteveldt",
     author_email="wouter@vanatteveldt.com",
@@ -24,10 +24,5 @@ setup(
         "requests_oauthlib",
         "tqdm",
     ],
-        extras_require={
-        'dev': [
-            'twine'
-        ]
-
-    },
+    extras_require={"dev": ["twine"]},
 )

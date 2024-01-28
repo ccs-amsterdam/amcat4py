@@ -312,6 +312,7 @@ class AmcatClient:
         name: str = None,
         description: str = None,
         guest_role: Optional[str] = None,
+        summary_field: Optional[str] = None,
     ):
         """
         Modify an index
@@ -323,7 +324,12 @@ class AmcatClient:
             body["guest_role"] = guest_role
         if description:
             body["description"] = description
+        if summary_field:
+            body["summary_field"] = summary_field
         return self._put(f"index/{index}", json=body).json()
+
+    def get_index(self, index: str):
+        return self._get(index=index).json()
 
     def create_user(self, email, role=None):
         """
@@ -455,3 +461,23 @@ class AmcatClient:
 
     def get_fields(self, index: str) -> dict:
         return self._get("fields", index).json()
+
+    def tags_update(
+        self,
+        index: str,
+        action: str,
+        field: str,
+        tag: str,
+        ids=None,
+        queries=None,
+        filters=None,
+    ):
+        body = dict(
+            field=field,
+            action=action,
+            tag=tag,
+            ids=ids,
+            queries=queries,
+            filters=filters,
+        )
+        self._post("tags_update", index, json=body)

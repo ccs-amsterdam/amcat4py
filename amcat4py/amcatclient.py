@@ -469,3 +469,13 @@ class AmcatClient:
             filters=filters,
         )
         self._post("tags_update", index, json=body)
+
+    def get_preprocessing_tasks(self):
+        return self._get("preprocessing_tasks").json()
+
+    def add_preprocessing_instruction(self, index:str, field: str, task: str, endpoint: str, arguments: List[dict], outputs: List[dict]):
+        body = dict(field=field, task=task, endpoint=endpoint, arguments=arguments, outputs=outputs)
+        self._post(f"index/{index}/preprocessing", json=body)
+
+    def get_preprocessing_instruction(self, index:str, field: str):
+        return self._get(f"index/{index}/preprocessing/{field}").json()

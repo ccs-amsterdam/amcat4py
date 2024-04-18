@@ -1,8 +1,10 @@
 from datetime import datetime, date, time
 from json import dumps
+from multiprocessing import Value
 from typing import List, Iterable, Optional, Union, Dict, Sequence
 
 import logging
+from pathlib import Path
 import requests
 from requests import HTTPError
 from .auth import _get_token, _check_token, token_refresh
@@ -39,7 +41,7 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host: str, refresh_token: (dict | str) = None, ignore_tz=True):
+    def __init__(self, host: str, refresh_token: dict | str = None, ignore_tz=True):
         """
         :param host: The host name of the API endpoint to connect to
         :param refresh_token: A refresh token
@@ -88,7 +90,9 @@ class AmcatClient:
             yield buffer
 
     def _url(self, url=None, index=None):
-        url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
+        url_parts = (
+            [self.host] + (["index", index] if index else []) + ([url] if url else [])
+        )
         return "/".join(url_parts)
 
     def _request(self, method, url=None, ignore_status=None, headers=None, **kargs):
@@ -96,7 +100,9 @@ class AmcatClient:
             headers = {}
         if self.token is None:
             if self.login_required():
-                raise Exception("This server requires a user to be authenticated. Please call .login() first")
+                raise Exception(
+                    "This server requires a user to be authenticated. Please call .login() first"
+                )
         else:
             self.token = _check_token(self.token, self.host)
             headers["Authorization"] = f"Bearer {self.token['access_token']}"
@@ -109,7 +115,9 @@ class AmcatClient:
         return r
 
     def _get(self, url=None, index=None, params=None, ignore_status=None):
-        return self._request("get", url=self._url(url, index), params=params, ignore_status=ignore_status)
+        return self._request(
+            "get", url=self._url(url, index), params=params, ignore_status=ignore_status
+        )
 
     def _post(self, url=None, index=None, json=None, ignore_status=None):
         if json:
@@ -128,10 +136,14 @@ class AmcatClient:
         )
 
     def _put(self, url=None, index=None, json=None, ignore_status=None):
-        return self._request("put", url=self._url(url, index), json=json, ignore_status=ignore_status)
+        return self._request(
+            "put", url=self._url(url, index), json=json, ignore_status=ignore_status
+        )
 
     def _delete(self, url=None, index=None, ignore_status=None):
-        return self._request("delete", url=self._url(url, index), ignore_status=ignore_status)
+        return self._request(
+            "delete", url=self._url(url, index), ignore_status=ignore_status
+        )
 
     def get_user(self, user: str = "me"):
         """Get information on the given user, or on self if no user is given
@@ -237,7 +249,9 @@ class AmcatClient:
             for res in d["results"]:
                 for date_field in date_fields:
                     if res.get(date_field):
-                        date = res[date_field][:10] if self.ignore_tz else res[date_field]
+                        date = (
+                            res[date_field][:10] if self.ignore_tz else res[date_field]
+                        )
                         res[date_field] = datetime.fromisoformat(date)
                 yield res
             body["scroll_id"] = d["meta"]["scroll_id"]
@@ -431,7 +445,9 @@ class AmcatClient:
             if not allow_unknown_fields:
                 for doc in chunk:
                     if unknown := (set(doc.keys()) - known_fields):
-                        raise ValueError(f"Document contained unknown fields: {unknown}")
+                        raise ValueError(
+                            f"Document contained unknown fields: {unknown}"
+                        )
             body = {"documents": chunk}
             self._post("documents", index=index, json=body)
 
@@ -473,9 +489,74 @@ class AmcatClient:
     def get_preprocessing_tasks(self):
         return self._get("preprocessing_tasks").json()
 
-    def add_preprocessing_instruction(self, index:str, field: str, task: str, endpoint: str, arguments: List[dict], outputs: List[dict]):
-        body = dict(field=field, task=task, endpoint=endpoint, arguments=arguments, outputs=outputs)
+    def add_preprocessing_instruction(
+        self,
+        index: str,
+        field: str,
+        task: str,
+        endpoint: str,
+        arguments: List[dict],
+        outputs: List[dict],
+    ):
+        body = dict(
+            field=field,
+            task=task,
+            endpoint=endpoint,
+            arguments=arguments,
+            outputs=outputs,
+        )
         self._post(f"index/{index}/preprocessing", json=body)
 
-    def get_preprocessing_instruction(self, index:str, field: str):
+    def get_preprocessing_instruction(self, index: str, field: str):
         return self._get(f"index/{index}/preprocessing/{field}").json()
+
+    def multimedia_list(
+        self,
+        index: str,
+        n=10,
+        prefix: str = None,
+        start_after: str = None,
+        recursive=False,
+        presigned_get=False,
+        metadata=False,
+        all_pages=True
+    ):
+        """Get a list of multimedia files in the storage for this index
+        See https://min.io/docs/minio/linux/developers/python/API.html#list_objects
+
+        :param n: Number of items to return (ordered alphabetically)
+        :param start_after: Start after the given key (for pagination)
+        :param prefix: Filter on this prefix (e.g. a folder name/)
+        :param recursive: If True, list all objects rather than per-folder
+        :param metadata: Include metadata in results (separately retrieved per object by the backend)
+        :param presigned_get: Include a pre-signed GET url for each object (separately retrieved per object by the backend)
+        """
+        params = dict(
+            n=n,
+            prefix=prefix,
+            start_after=start_after,
+            presigned_get=presigned_get,
+            metadata=metadata,
+            recursive=recursive,
+        )
+        while True:
+            res = self._get(f"index/{index}/multimedia/list", params=params).json()
+            yield from res
+            if (not all_pages) or (len(res) < n):
+                break
+            params["start_after"] = res[-1]["key"]
+
+    def multimedia_presigned_post(self, index):
+        return self._get(f"index/{index}/multimedia/presigned_post").json()
+
+    def multimedia_upload_files(self, index, files: Iterable[Path|str], prefix=None):
+        res = self.multimedia_presigned_post(index)
+        files = [(Path(file) if not isinstance(file, Path) else file) for file in files]
+        missing = [file for file in files if not file.exists()]
+        if missing:
+            raise ValueError(f"File(s) not found: {missing}")
+        url = res['url']
+        form_data = res['form_data']
+        for file in files:
+            with file.open("rb") as f:
+                requests.post(url=url, data={"key": f"{prefix}{file.name}", **form_data}, files={"file": f})

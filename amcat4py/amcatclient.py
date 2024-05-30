@@ -283,7 +283,7 @@ class AmcatClient:
         description: str = None,
         guest_role: Optional[str] = None,
     ):
-        """
+        r"""
         Create an index
 
         Parameters:
@@ -335,7 +335,7 @@ class AmcatClient:
     def get_index(self, index: str):
         return self._get(index=index).json()
 
-    def create_user(self, email, role=None):
+    def create_user(self, email, role="NONE"):
         """
         Create a new user
         :param email: Email address of the new user to add

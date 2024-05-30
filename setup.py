@@ -6,7 +6,7 @@ setup(
     name="amcat4py",
     version="4.0.15",
     description="Python client for AmCAT4 API",
-    author="Wouter van Atteveldt",
+    author="Wouter van Atteveldt, Johannes B. Gruber",
     author_email="wouter@vanatteveldt.com",
     packages=["amcat4py"],
     include_package_data=False,

@@ -2,7 +2,7 @@ import pprint
 from amcat4py import AmcatClient
 from amcat4py.amcatclient import AmcatError
 
-amcat = AmcatClient("http://localhost/amcat/")
+amcat = AmcatClient("http://localhost/amcat")
 if amcat.login_required():
     amcat.login()
 
@@ -31,8 +31,7 @@ new_doc = {
   "date": "2022-01-01",
   "president": "test",
   "year": "2022",
-  "party": "test",
-  "url": "test"
+  "party": "test"
 }
 amcat.upload_documents("state_of_the_union", [new_doc])
 
@@ -46,13 +45,13 @@ fields = amcat.get_fields("state_of_the_union")
 pp.pprint(fields)
 
 print("\n** create index **")
-amcat.create_index(index="new_index", guest_role="admin")
+amcat.create_index(index="new_index", guest_role="ADMIN")
 indexes = amcat.list_indices()
 pp.pprint(indexes)
 amcat.get_fields("new_index")
 
 print("\n** modify index **")
-amcat.modify_index(index="new_index", name="A New Index", guest_role="admin")
+amcat.modify_index(index="new_index", name="A New Index", guest_role="METAREADER")
 indexes = amcat.list_indices()
 pp.pprint(indexes)
 
@@ -67,9 +66,9 @@ try:
     amcat.create_user(email="test@amcat.nl")
 except AmcatError as e:
     print("Error:",  e.message)
-amcat.add_index_user("state_of_the_union", email="test@amcat.nl", role="reader")
+amcat.add_index_user("state_of_the_union", email="test@amcat.nl", role="READER")
 users = amcat.list_index_users("state_of_the_union")
 pp.pprint(users)
-amcat.modify_index_user("state_of_the_union", email="test@amcat.nl", role="metareader")
+amcat.modify_index_user("state_of_the_union", email="test@amcat.nl", role="METAREADER")
 amcat.delete_index_user("state_of_the_union", email="test@amcat.nl")
 amcat.delete_user("test@amcat.nl")

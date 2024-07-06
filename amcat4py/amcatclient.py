@@ -1,7 +1,7 @@
 from datetime import datetime, date, time
 from json import dumps
 from multiprocessing import Value
-from typing import List, Iterable, Optional, Union, Dict, Sequence
+from typing import Any, List, Iterable, Optional, Union, Dict, Sequence
 
 import logging
 from pathlib import Path
@@ -255,6 +255,27 @@ class AmcatClient:
                         res[date_field] = datetime.fromisoformat(date)
                 yield res
             body["scroll_id"] = d["meta"]["scroll_id"]
+
+    def update_by_query(
+        self,
+        index: str,
+        field: str,
+        value: Any,
+        *,
+        queries: Union[str, list, dict] = None,
+        filters: Dict[str, Union[str, list, dict]] = None,
+    ):
+        """
+        Update the index by query
+
+        :param index: The name of the index to search
+        :param field: A field name to update
+        :param value: The value to set for the selected documents (or None to delete the field)
+        :param queries: One or more query strings or objects to search for
+        :param filters: A dictionary of filters to apply to the search
+        """
+        body = {"field": field, "value": value, "queries": queries, "filters": filters}
+        return self._post(f"index/{index}/update_by_query", json=body).json()
 
     def query_aggregate(
         self,
@@ -519,7 +540,7 @@ class AmcatClient:
         recursive=False,
         presigned_get=False,
         metadata=False,
-        all_pages=True
+        all_pages=True,
     ):
         """Get a list of multimedia files in the storage for this index
         See https://min.io/docs/minio/linux/developers/python/API.html#list_objects
@@ -549,14 +570,18 @@ class AmcatClient:
     def multimedia_presigned_post(self, index):
         return self._get(f"index/{index}/multimedia/presigned_post").json()
 
-    def multimedia_upload_files(self, index, files: Iterable[Path|str], prefix=None):
+    def multimedia_upload_files(self, index, files: Iterable[Path | str], prefix=None):
         res = self.multimedia_presigned_post(index)
         files = [(Path(file) if not isinstance(file, Path) else file) for file in files]
         missing = [file for file in files if not file.exists()]
         if missing:
             raise ValueError(f"File(s) not found: {missing}")
-        url = res['url']
-        form_data = res['form_data']
+        url = res["url"]
+        form_data = res["form_data"]
         for file in files:
             with file.open("rb") as f:
-                requests.post(url=url, data={"key": f"{prefix}{file.name}", **form_data}, files={"file": f})
+                requests.post(
+                    url=url,
+                    data={"key": f"{prefix}{file.name}", **form_data},
+                    files={"file": f},
+                )

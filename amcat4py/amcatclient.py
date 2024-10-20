@@ -51,7 +51,9 @@ class AmcatClient:
         self.ignore_tz = ignore_tz
         self.server_config = self.get_server_config()
         # If we have a token cached, load it. Otherwise, only log in if explicitly requested
-        if refresh_token:
+        if self.server_config["authorization"] == "no_auth":
+            self.token = None
+        elif refresh_token:
             if isinstance(refresh_token, str):
                 refresh_token = dict(refresh_token=refresh_token, refresh_rotate=False)
             self.token = token_refresh(refresh_token, host)
@@ -90,9 +92,7 @@ class AmcatClient:
             yield buffer
 
     def _url(self, url=None, index=None):
-        url_parts = (
-            [self.host] + (["index", index] if index else []) + ([url] if url else [])
-        )
+        url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
         return "/".join(url_parts)
 
     def _request(self, method, url=None, ignore_status=None, headers=None, **kargs):
@@ -100,9 +100,7 @@ class AmcatClient:
             headers = {}
         if self.token is None:
             if self.login_required():
-                raise Exception(
-                    "This server requires a user to be authenticated. Please call .login() first"
-                )
+                raise Exception("This server requires a user to be authenticated. Please call .login() first")
         else:
             self.token = _check_token(self.token, self.host)
             headers["Authorization"] = f"Bearer {self.token['access_token']}"
@@ -115,9 +113,7 @@ class AmcatClient:
         return r
 
     def _get(self, url=None, index=None, params=None, ignore_status=None):
-        return self._request(
-            "get", url=self._url(url, index), params=params, ignore_status=ignore_status
-        )
+        return self._request("get", url=self._url(url, index), params=params, ignore_status=ignore_status)
 
     def _post(self, url=None, index=None, json=None, ignore_status=None):
         if json:
@@ -136,14 +132,10 @@ class AmcatClient:
         )
 
     def _put(self, url=None, index=None, json=None, ignore_status=None):
-        return self._request(
-            "put", url=self._url(url, index), json=json, ignore_status=ignore_status
-        )
+        return self._request("put", url=self._url(url, index), json=json, ignore_status=ignore_status)
 
     def _delete(self, url=None, index=None, ignore_status=None):
-        return self._request(
-            "delete", url=self._url(url, index), ignore_status=ignore_status
-        )
+        return self._request("delete", url=self._url(url, index), ignore_status=ignore_status)
 
     def get_user(self, user: str = "me"):
         """Get information on the given user, or on self if no user is given
@@ -249,9 +241,7 @@ class AmcatClient:
             for res in d["results"]:
                 for date_field in date_fields:
                     if res.get(date_field):
-                        date = (
-                            res[date_field][:10] if self.ignore_tz else res[date_field]
-                        )
+                        date = res[date_field][:10] if self.ignore_tz else res[date_field]
                         res[date_field] = datetime.fromisoformat(date)
                 yield res
             body["scroll_id"] = d["meta"]["scroll_id"]
@@ -462,15 +452,26 @@ class AmcatClient:
             )
         else:
             generator = self._chunks(articles, chunk_size=chunk_size)
+        successes, failures = 0, []
         for chunk in generator:
             if not allow_unknown_fields:
                 for doc in chunk:
                     if unknown := (set(doc.keys()) - known_fields):
-                        raise ValueError(
-                            f"Document contained unknown fields: {unknown}"
-                        )
+                        raise ValueError(f"Document contained unknown fields: {unknown}")
             body = {"documents": chunk}
-            self._post("documents", index=index, json=body)
+            result = self._post("documents", index=index, json=body).json()
+            successes += result["successes"]
+            failures += result["failures"]
+        if failures:
+            for failure in failures[:10]:
+                logging.warning(list(failure.values())[0]["error"])
+            if len(failures) > 10:
+                logging.warning(f"{len(failures) - 10} more errors")
+            if not successes:
+                raise ValueError("Uploading failed for all documents")
+            else:
+                logging.warning(f"{len(failures)} failed to upload, see individual warnings above")
+        return successes, failures
 
     def update_document(self, index: str, doc_id, body):
         self._put(f"documents/{doc_id}", index, json=body)

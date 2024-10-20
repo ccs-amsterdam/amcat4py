@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name="amcat4py",
-    version="4.0.15",
+    version="4.0.17",
     description="Python client for AmCAT4 API",
     author="Wouter van Atteveldt, Johannes B. Gruber",
     author_email="wouter@vanatteveldt.com",

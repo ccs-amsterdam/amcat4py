@@ -55,7 +55,7 @@ class AmcatClient:
         :param api_key: An API key string (new backends, 4.1.0+)
         :param ignore_tz: Do we ignore time zones when querying articles
         """
-        self.host = host
+        self.host = host.rstrip("/")
         self.ignore_tz = ignore_tz
         self.server_config = self.get_server_config()
         self.api_version = self.server_config.get("api_version")
@@ -74,15 +74,19 @@ class AmcatClient:
             else:
                 self.token = _get_token(self.host, login_if_needed=False)
 
-    def login(self, force_refresh=False):
+    def login(self, api_key: Optional[str] = None, force_refresh=False):
+        if not self.login_required():
+            return
         if self.api_version and _version_gte(self.api_version, "4.1.0"):
-            self.api_key = input(f"Enter API key for {self.host}: ").strip()
+            if api_key is None:
+                raise ValueError("This server requires an API key. Please call login(api_key=...)")
+            self.api_key = api_key
         else:
             self.token = _get_token(self.host, force_refresh=force_refresh)
 
     def login_required(self):
         return self.server_config["authorization"] in (
-            "_authenticated_guests",
+            "allow_authenticated_guests",
             "authorized_users_only",
         )
 

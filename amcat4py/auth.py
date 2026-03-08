@@ -6,7 +6,7 @@ from hashlib import sha256
 from json import dumps, loads
 from random import getrandbits
 from re import search
-from socket import AF_INET, SOCK_STREAM, socket
+from socket import AF_INET, SHUT_WR, SOCK_STREAM, socket
 from typing import Optional
 from webbrowser import open as browse
 
@@ -77,10 +77,13 @@ def get_middlecat_token(host, callback_port=65432, refresh="static") -> dict:
     print("Waiting for authorization in browser...")
     conn, addr = s.accept()
 
+    data = conn.recv(4096).decode()
+    match = search(r"code=([^&\s]+)", data)
+    if match is None:
+        raise ValueError(f"No authorization code in callback: {data!r}")
+    code = match.group(1)
     conn.sendall(FELINE_RESPONSE.encode("ascii"))
-
-    data = conn.recv(1024).decode()
-    code = search(r"code=([^&\s]+)", data).group(1)
+    conn.shutdown(SHUT_WR)
     conn.close()
 
     # using the received code, make a request to get the actual token
@@ -131,6 +134,14 @@ def _get_token(host, force_refresh=False, login_if_needed=True) -> Optional[dict
     file_path = user_cache_dir(CLIENT_ID) + "/" + sha256(host.encode()).hexdigest()
     if os.path.exists(file_path) and not force_refresh:
         token = secret_read(file_path, host)
+        try:
+            return _check_token(token, host)
+        except Exception:
+            logging.warning("Cached token is invalid or refresh failed; clearing cache.")
+            os.remove(file_path)
+            if not login_if_needed:
+                return None
+            token = get_middlecat_token(host)
     elif login_if_needed:
         token = get_middlecat_token(host)
     else:
@@ -211,8 +222,8 @@ def pkce_challange() -> dict:
     :param x: string to be encoded.
     """
     # Generate random 32-octet sequence
-    verifier = getrandbits(256).to_bytes(32, byteorder="big")
-    verifier = base64_url_encode(verifier)
-    challenge = sha256(verifier.encode("utf-8")).digest()
-    challenge = base64_url_encode(challenge)
+    verifier_bytes = getrandbits(256).to_bytes(32, byteorder="big")
+    verifier = base64_url_encode(verifier_bytes)
+    challenge_bytes = sha256(verifier.encode("utf-8")).digest()
+    challenge = base64_url_encode(challenge_bytes)
     return {"verifier": verifier, "method": "S256", "challenge": challenge}

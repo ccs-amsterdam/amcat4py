@@ -1,21 +1,21 @@
 import logging
-from typing import Optional
-
-import requests
 import os
-from appdirs import user_cache_dir
-from base64 import urlsafe_b64encode, b64encode
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from base64 import b64encode, urlsafe_b64encode
 from datetime import datetime, timedelta
 from hashlib import sha256
 from json import dumps, loads
 from random import getrandbits
 from re import search
-from requests_oauthlib import OAuth2Session
-from socket import socket, AF_INET, SOCK_STREAM
+from socket import AF_INET, SOCK_STREAM, socket
+from typing import Optional
 from webbrowser import open as browse
+
+import requests
+from appdirs import user_cache_dir
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from requests_oauthlib import OAuth2Session
 
 CLIENT_ID = "amcat4py"
 
@@ -51,7 +51,7 @@ def get_middlecat_token(host, callback_port=65432, refresh="static") -> dict:
         try:
             s.bind(("127.0.0.1", callback_port))
         except OSError:
-            logging.info(f"Port {callback_port} already in use, trying {callback_port-1}")
+            logging.info(f"Port {callback_port} already in use, trying {callback_port - 1}")
             callback_port -= 1
         else:
             break
@@ -67,7 +67,7 @@ def get_middlecat_token(host, callback_port=65432, refresh="static") -> dict:
         "refresh_mode": refresh,
         "session_type": "api_key",
         "code_challenge_method": pkce["method"],
-        "code_challenge": pkce["challenge"]
+        "code_challenge": pkce["challenge"],
     }
 
     oauth = OAuth2Session(client_id=CLIENT_ID, redirect_uri=f"http://localhost:{callback_port}/")
@@ -103,7 +103,7 @@ def token_refresh(token, host) -> dict:
         "refresh_mode": token["refresh_rotate"],
         "session_type": "api_key",
         "refresh_token": token["refresh_token"],
-        "client_id": CLIENT_ID
+        "client_id": CLIENT_ID,
     }
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
     return _request_token(params, headers, host, token_url)
@@ -215,8 +215,4 @@ def pkce_challange() -> dict:
     verifier = base64_url_encode(verifier)
     challenge = sha256(verifier.encode("utf-8")).digest()
     challenge = base64_url_encode(challenge)
-    return {
-        "verifier": verifier,
-        "method": "S256",
-        "challenge": challenge
-    }
+    return {"verifier": verifier, "method": "S256", "challenge": challenge}

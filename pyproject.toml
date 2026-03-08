@@ -25,4 +25,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["twine"]
+dev = ["twine", "types-tqdm", "types-requests"]
+
+[tool.uv]
+default-extras = ["dev"]
+
+[tool.ruff]
+line-length = 127
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E203"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["amcat4py"]

@@ -1,1 +1,1 @@
-from .amcatclient import AmcatClient
+from .amcatclient import AmcatClient as AmcatClient

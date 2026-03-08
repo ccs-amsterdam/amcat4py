@@ -29,7 +29,9 @@ class AmcatError(HTTPError):
 
 
 def _version_gte(version_str: str, min_version: str) -> bool:
-    def parse(v): return tuple(int(x) for x in v.split(".")[:3])
+    def parse(v):
+        return tuple(int(x) for x in v.split(".")[:3])
+
     return parse(version_str) >= parse(min_version)
 
 
@@ -46,7 +48,7 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host: str, refresh_token: dict | str = None, api_key: Optional[str] = None, ignore_tz=True):
+    def __init__(self, host: str, refresh_token: Optional[dict | str] = None, api_key: Optional[str] = None, ignore_tz=True):
         """
         :param host: The host name of the API endpoint to connect to
         :param refresh_token: A refresh token (old backends, <4.1.0)
@@ -110,7 +112,7 @@ class AmcatClient:
         url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
         return "/".join(url_parts)
 
-    def _request(self, method, url=None, ignore_status=None, headers=None, **kargs):
+    def _request(self, method, url: str, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
         if self.api_key is not None:
@@ -220,10 +222,10 @@ class AmcatClient:
         *,
         scroll="2m",
         per_page=100,
-        sort: Union[str, dict, list] = None,
+        sort: Optional[Union[str, dict, list]] = None,
         fields: Sequence[str] = ("date", "title", "url"),
-        queries: Union[str, list, dict] = None,
-        filters: Dict[str, Union[str, list, dict]] = None,
+        queries: Optional[Union[str, list, dict]] = None,
+        filters: Optional[Dict[str, Union[str, list, dict]]] = None,
         date_fields: Sequence[str] = ("date",),
     ):
         """
@@ -267,8 +269,8 @@ class AmcatClient:
         field: str,
         value: Any,
         *,
-        queries: Union[str, list, dict] = None,
-        filters: Dict[str, Union[str, list, dict]] = None,
+        queries: Optional[Union[str, list, dict]] = None,
+        filters: Optional[Dict[str, Union[str, list, dict]]] = None,
     ):
         """
         Update the index by query
@@ -311,8 +313,8 @@ class AmcatClient:
     def create_index(
         self,
         index: str,
-        name: str = None,
-        description: str = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
         guest_role: Optional[str] = None,
     ):
         r"""
@@ -345,8 +347,8 @@ class AmcatClient:
     def modify_index(
         self,
         index: str,
-        name: str = None,
-        description: str = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
         guest_role: Optional[str] = None,
         summary_field: Optional[str] = None,
     ):
@@ -433,12 +435,12 @@ class AmcatClient:
     def upload_documents(
         self,
         index: str,
-        articles: Iterable[dict],
-        columns: dict = None,
+        articles: Sequence[dict],
+        columns: Optional[dict] = None,
         chunk_size=100,
         show_progress=False,
         allow_unknown_fields=False,
-    ) -> None:
+    ) -> tuple:
         """
         Upload documents to the server. First argument is the name of the index where the new documents should be inserted.
         Second argument is an iterable (e.g., a list) of dictionaries. Each dictionary represents a single document.
@@ -455,9 +457,10 @@ class AmcatClient:
         :param show_progress: show a progress bar when uploading documents (default: False)
         :param allow_new_fields: if set, documents with unknown fields are allowed (default: False)
         """
-        body = {}
+        body: dict[str, Any] = {}
         if columns:
             body["columns"] = columns
+        known_fields: set = set()
         if not allow_unknown_fields:
             known_fields = set(self.get_fields(index).keys())
             if columns:
@@ -467,7 +470,7 @@ class AmcatClient:
 
             from tqdm import tqdm
 
-            generator = tqdm(
+            generator: Iterable[list[Any]] = tqdm(
                 self._chunks(articles, chunk_size=chunk_size),
                 total=math.ceil(len(articles) / chunk_size),
                 unit="chunks",
@@ -558,8 +561,8 @@ class AmcatClient:
         self,
         index: str,
         n=10,
-        prefix: str = None,
-        start_after: str = None,
+        prefix: Optional[str] = None,
+        start_after: Optional[str] = None,
         recursive=False,
         presigned_get=False,
         metadata=False,
@@ -595,16 +598,16 @@ class AmcatClient:
 
     def multimedia_upload_files(self, index, files: Iterable[Path | str], prefix=None):
         res = self.multimedia_presigned_post(index)
-        files = [(Path(file) if not isinstance(file, Path) else file) for file in files]
-        missing = [file for file in files if not file.exists()]
+        paths: list[Path] = [file if isinstance(file, Path) else Path(file) for file in files]
+        missing = [p for p in paths if not p.exists()]
         if missing:
             raise ValueError(f"File(s) not found: {missing}")
         url = res["url"]
         form_data = res["form_data"]
-        for file in files:
-            with file.open("rb") as f:
+        for p in paths:
+            with p.open("rb") as f:
                 requests.post(
                     url=url,
-                    data={"key": f"{prefix}{file.name}", **form_data},
+                    data={"key": f"{prefix}{p.name}", **form_data},
                     files={"file": f},
                 )

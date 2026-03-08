@@ -32,24 +32,24 @@ def run_action(args):
     args.func(client, args)
 
 
-logging.basicConfig(format='[%(levelname)-7s:%(name)-15s] %(message)s', level=logging.INFO)
+logging.basicConfig(format="[%(levelname)-7s:%(name)-15s] %(message)s", level=logging.INFO)
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--host", default="http://localhost:5000")
 parser.add_argument("--username", default="admin")
 parser.add_argument("--password", default="admin")
-subparsers = parser.add_subparsers(dest='action', title='action', required=True)
+subparsers = parser.add_subparsers(dest="action", title="action", required=True)
 
-subparsers.add_parser('list', help='List indices').set_defaults(func=index_list)
-p = subparsers.add_parser('create', help='Create index')
+subparsers.add_parser("list", help="List indices").set_defaults(func=index_list)
+p = subparsers.add_parser("create", help="Create index")
 p.add_argument("name", help="New index name")
 p.set_defaults(func=index_create)
 
-p = subparsers.add_parser('delete', help='Delete index')
+p = subparsers.add_parser("delete", help="Delete index")
 p.add_argument("name", help="Index to delete")
 p.set_defaults(func=index_delete)
 
-p = subparsers.add_parser('copy', help='Copy index')
+p = subparsers.add_parser("copy", help="Copy index")
 p.add_argument("src", help="Index to copy from")
 p.add_argument("dest", help="Index to copy to")
 p.add_argument("--ignore-fields", help="Comma separated list of fields to ignore")

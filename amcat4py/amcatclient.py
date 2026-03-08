@@ -1,13 +1,14 @@
-from datetime import datetime, date, time
+import logging
+from datetime import date, datetime, time
 from json import dumps
 from multiprocessing import Value
-from typing import Any, List, Iterable, Optional, Union, Dict, Sequence
-
-import logging
 from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
+
 import requests
 from requests import HTTPError
-from .auth import _get_token, _check_token, token_refresh
+
+from .auth import _check_token, _get_token, token_refresh
 
 
 class AmcatError(HTTPError):
@@ -122,7 +123,6 @@ class AmcatClient:
         else:
             data = None
             headers = {}
-
         return self._request(
             "post",
             url=self._url(url, index),
@@ -271,20 +271,26 @@ class AmcatClient:
         self,
         index: str,
         *,
-        axes: Union[str, list, dict] = None,
-        queries: Union[str, list, dict] = None,
-        filters: Dict[str, Union[str, list, dict]] = None,
+        axes: Optional[str | list] = None,
+        queries: Optional[str | list | dict] = None,
+        filters: Optional[dict[str, str | list | dict]] = None,
+        aggregations: Optional[list] = None,
     ):
         """
         Execute a search query on this server and aggregate results
 
         :param index: The name of the index to search
-        :param axes: The aggregation axes, e.g. [{"field": "publisher", [{"field": "date", "interval": "year"}]}]
+        :param axes: The aggregation axes, e.g. [{"field": "publisher"}, {"field": "date", "interval": "year"}]
         :param queries: One or more query strings or objects to search for
         :param filters: A dictionary of filters to apply to the search
+        :param aggregations:
         :return: an iterator over the search results, with the requested (or all) fields
         """
-        body = {"axes": axes, "queries": queries, "filters": filters}
+        if isinstance(axes, str):
+            axes = [axes]
+        if axes:
+            axes = [{"field": axis} if isinstance(axis, str) else axis for axis in axes]
+        body = {"axes": axes, "queries": queries, "filters": filters, "aggregations": aggregations}
         return self._post(f"index/{index}/aggregate", json=body).json()["data"]
 
     def create_index(
@@ -442,8 +448,9 @@ class AmcatClient:
             if columns:
                 known_fields |= set(columns.keys())
         if show_progress:
-            from tqdm import tqdm
             import math
+
+            from tqdm import tqdm
 
             generator = tqdm(
                 self._chunks(articles, chunk_size=chunk_size),

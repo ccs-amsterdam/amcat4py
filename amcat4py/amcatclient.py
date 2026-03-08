@@ -1,7 +1,6 @@
 import logging
 from datetime import date, datetime, time
 from json import dumps
-from multiprocessing import Value
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 
@@ -29,6 +28,11 @@ class AmcatError(HTTPError):
         return f"Error from server ({self.response.status_code}): {self.message}"
 
 
+def _version_gte(version_str: str, min_version: str) -> bool:
+    def parse(v): return tuple(int(x) for x in v.split(".")[:3])
+    return parse(version_str) >= parse(min_version)
+
+
 def serialize(obj):
     """JSON serializer that accepts datetime & date"""
     if isinstance(obj, date) and not isinstance(obj, datetime):
@@ -42,27 +46,37 @@ def serialize(obj):
 
 
 class AmcatClient:
-    def __init__(self, host: str, refresh_token: dict | str = None, ignore_tz=True):
+    def __init__(self, host: str, refresh_token: dict | str = None, api_key: Optional[str] = None, ignore_tz=True):
         """
         :param host: The host name of the API endpoint to connect to
-        :param refresh_token: A refresh token
+        :param refresh_token: A refresh token (old backends, <4.1.0)
+        :param api_key: An API key string (new backends, 4.1.0+)
         :param ignore_tz: Do we ignore time zones when querying articles
         """
         self.host = host
         self.ignore_tz = ignore_tz
         self.server_config = self.get_server_config()
-        # If we have a token cached, load it. Otherwise, only log in if explicitly requested
-        if self.server_config["authorization"] == "no_auth":
-            self.token = None
-        elif refresh_token:
-            if isinstance(refresh_token, str):
-                refresh_token = dict(refresh_token=refresh_token, refresh_rotate=False)
-            self.token = token_refresh(refresh_token, host)
+        self.api_version = self.server_config.get("api_version")
+        self.token = None
+        self.api_key = None
+        if not self.login_required():
+            pass
+        elif self.api_version and _version_gte(self.api_version, "4.1.0"):
+            self.api_key = api_key
         else:
-            self.token = _get_token(self.host, login_if_needed=False)
+            # old OAuth flow
+            if refresh_token:
+                if isinstance(refresh_token, str):
+                    refresh_token = dict(refresh_token=refresh_token, refresh_rotate=False)
+                self.token = token_refresh(refresh_token, host)
+            else:
+                self.token = _get_token(self.host, login_if_needed=False)
 
     def login(self, force_refresh=False):
-        self.token = _get_token(self.host, force_refresh=force_refresh)
+        if self.api_version and _version_gte(self.api_version, "4.1.0"):
+            self.api_key = input(f"Enter API key for {self.host}: ").strip()
+        else:
+            self.token = _get_token(self.host, force_refresh=force_refresh)
 
     def login_required(self):
         return self.server_config["authorization"] in (
@@ -99,12 +113,13 @@ class AmcatClient:
     def _request(self, method, url=None, ignore_status=None, headers=None, **kargs):
         if headers is None:
             headers = {}
-        if self.token is None:
-            if self.login_required():
-                raise Exception("This server requires a user to be authenticated. Please call .login() first")
-        else:
+        if self.api_key is not None:
+            headers["X-API-Key"] = self.api_key
+        elif self.token is not None:
             self.token = _check_token(self.token, self.host)
             headers["Authorization"] = f"Bearer {self.token['access_token']}"
+        elif self.login_required():
+            raise Exception("This server requires authentication. Please call .login() first")
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             try:

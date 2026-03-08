@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "amcat4py"
+version = "4.0.17"
+description = "Python client for AmCAT4 API"
+authors = [
+    { name = "Wouter van Atteveldt", email = "wouter@vanatteveldt.com" },
+    { name = "Johannes B. Gruber" },
+]
+keywords = ["API", "text"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Text Processing",
+]
+dependencies = [
+    "requests",
+    "appdirs",
+    "cryptography",
+    "requests_oauthlib",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+dev = ["twine"]

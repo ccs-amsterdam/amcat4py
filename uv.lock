@@ -4,7 +4,7 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "amcat4py"
-version = "4.0.17"
+version = "4.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "appdirs" },

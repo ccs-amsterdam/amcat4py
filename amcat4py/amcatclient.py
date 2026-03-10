@@ -152,8 +152,8 @@ class AmcatClient:
             ignore_status=ignore_status,
         )
 
-    def _put(self, url=None, index=None, json=None, ignore_status=None):
-        return self._request("put", url=self._url(url, index), json=json, ignore_status=ignore_status)
+    def _put(self, url=None, index=None, json=None, ignore_status=None, params: dict[str, str] | None = None):
+        return self._request("put", url=self._url(url, index), json=json, params=params, ignore_status=ignore_status)
 
     def _delete(self, url=None, index=None, ignore_status=None):
         return self._request("delete", url=self._url(url, index), ignore_status=ignore_status)
@@ -502,8 +502,9 @@ class AmcatClient:
                 logging.warning(f"{len(failures)} failed to upload, see individual warnings above")
         return successes, failures
 
-    def update_document(self, index: str, doc_id, body):
-        self._put(f"documents/{doc_id}", index, json=body)
+    def update_document(self, index: str, doc_id, body, upsert: bool = False):
+        params = {"upsert": "true"} if upsert else None
+        return self._put(f"documents/{doc_id}", index, json=body, params=params)
 
     def get_document(self, index: str, doc_id):
         return self._get(f"documents/{doc_id}", index).json()

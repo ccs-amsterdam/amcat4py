@@ -192,13 +192,13 @@ def secret_read(path, host) -> dict:
 def make_key(key) -> bytes:
     """
     Helper function to make key for encryption of tokens
-    :param key: string that is turned into key.
+    :param key: string that is turned into key (the host URL).
     """
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
-        salt="supergeheim".encode(),
-        iterations=5,
+        salt=key.encode(),
+        iterations=600_000,
     )
     return urlsafe_b64encode(kdf.derive(key.encode()))
 

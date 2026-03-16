@@ -28,7 +28,9 @@ def index_copy(client: AmcatClient, args):
 
 
 def run_action(args):
-    client = AmcatClient(args.host, args.username, args.password)
+    client = AmcatClient(args.host, api_key=args.api_key)
+    if args.api_key is None:
+        client.login()
     args.func(client, args)
 
 
@@ -36,8 +38,7 @@ logging.basicConfig(format="[%(levelname)-7s:%(name)-15s] %(message)s", level=lo
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--host", default="http://localhost:5000")
-parser.add_argument("--username", default="admin")
-parser.add_argument("--password", default="admin")
+parser.add_argument("--api-key", default=None, help="API key for authentication")
 subparsers = parser.add_subparsers(dest="action", title="action", required=True)
 
 subparsers.add_parser("list", help="List indices").set_defaults(func=index_list)

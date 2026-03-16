@@ -1,18 +1,8 @@
 import logging
-from typing import Iterable, List, Optional, Sequence
+from typing import Optional, Sequence
 
 from amcat4py import AmcatClient
-
-
-def chunks(items: Iterable, chunk_size=100) -> Iterable[List]:
-    buffer = []
-    for item in items:
-        buffer.append(item)
-        if len(buffer) > chunk_size:
-            yield buffer
-            buffer = []
-    if buffer:
-        yield buffer
+from amcat4py.amcatclient import _chunks
 
 
 def copy_documents(
@@ -36,8 +26,8 @@ def copy_documents(
     logging.info(f"Found {len(urls)} urls in {dest.host}/index/{dest_index}")
     fields = [f for f in src_fields.keys() if f not in ignore_fields]
     docs = (d for d in src.documents(src_index, scroll="10m", fields=fields) if d["url"] not in urls)
-    for page in chunks(docs):
+    for page in _chunks(docs):
         for doc in page:
-            del doc["_id"]
+            doc.pop("_id", None)
         logging.info(f"Uploading {len(page)} documents...")
         dest.upload_documents(dest_index, page)

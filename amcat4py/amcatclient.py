@@ -1,8 +1,9 @@
 import logging
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime, time
 from json import dumps
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
+from typing import Any
 
 import requests
 from requests import HTTPError
@@ -43,12 +44,24 @@ def serialize(obj):
         return obj.isoformat()
     if isinstance(obj, set):
         return sorted(obj)
-    if "numpy.float32" in str(type(obj)):
+    if type(obj).__module__ == "numpy" and hasattr(obj, "item"):
         return float(obj)
 
 
+def _chunks(items: Iterable[Any], chunk_size: int = 100) -> Iterable[list[Any]]:
+    """Split an iterable into chunks of at most chunk_size items."""
+    buffer: list[Any] = []
+    for item in items:
+        buffer.append(item)
+        if len(buffer) >= chunk_size:
+            yield buffer
+            buffer = []
+    if buffer:
+        yield buffer
+
+
 class AmcatClient:
-    def __init__(self, host: str, refresh_token: Optional[dict | str] = None, api_key: Optional[str] = None, ignore_tz=True):
+    def __init__(self, host: str, refresh_token: dict | str | None = None, api_key: str | None = None, ignore_tz=True):
         """
         :param host: The host name of the API endpoint to connect to
         :param refresh_token: A refresh token (old backends, <4.1.0)
@@ -74,7 +87,7 @@ class AmcatClient:
             else:
                 self.token = _get_token(self.host, login_if_needed=False)
 
-    def login(self, api_key: Optional[str] = None, force_refresh=False):
+    def login(self, api_key: str | None = None, force_refresh=False):
         if not self.login_required():
             return
         if self.api_version and _version_gte(self.api_version, "4.1.0"):
@@ -100,18 +113,6 @@ class AmcatClient:
                     logging.warning(w)
         return config
 
-    @staticmethod
-    def _chunks(items: Iterable, chunk_size=100) -> Iterable[List]:
-        """utility method for uploading documents in batches"""
-        buffer = []
-        for item in items:
-            buffer.append(item)
-            if len(buffer) > chunk_size:
-                yield buffer
-                buffer = []
-        if buffer:
-            yield buffer
-
     def _url(self, url=None, index=None):
         url_parts = [self.host] + (["index", index] if index else []) + ([url] if url else [])
         return "/".join(url_parts)
@@ -125,7 +126,7 @@ class AmcatClient:
             self.token = _check_token(self.token, self.host)
             headers["Authorization"] = f"Bearer {self.token['access_token']}"
         elif self.login_required():
-            raise Exception("This server requires authentication. Please call .login() first")
+            raise PermissionError("This server requires authentication. Please call .login() first")
         r = requests.request(method, url, headers=headers, **kargs)
         if not (ignore_status and r.status_code in ignore_status):
             try:
@@ -153,7 +154,14 @@ class AmcatClient:
         )
 
     def _put(self, url=None, index=None, json=None, ignore_status=None, params: dict[str, str] | None = None):
-        return self._request("put", url=self._url(url, index), json=json, params=params, ignore_status=ignore_status)
+        if json:
+            data = dumps(json, default=serialize)
+            headers = {"Content-Type": "application/json"}
+        else:
+            data = None
+            headers = {}
+        return self._request("put", url=self._url(url, index), data=data, headers=headers,
+                             params=params, ignore_status=ignore_status)
 
     def _delete(self, url=None, index=None, ignore_status=None):
         return self._request("delete", url=self._url(url, index), ignore_status=ignore_status)
@@ -166,20 +174,20 @@ class AmcatClient:
         """
         return self._get(f"users/{user}")
 
-    def list_indices(self) -> List[dict]:
+    def list_indices(self) -> list[dict]:
         """
         List all indices on this server
         :return: a list of index dicts with keys name and (your) role
         """
         return self._get("index/").json()
 
-    def list_users(self) -> List[dict]:
+    def list_users(self) -> list[dict]:
         """
         List users and their global roles
         """
         return self._get("users").json()
 
-    def list_index_users(self, index: str) -> List[dict]:
+    def list_index_users(self, index: str) -> list[dict]:
         """
         List users and their roles in an index
         """
@@ -188,7 +196,7 @@ class AmcatClient:
     def documents(
         self,
         index: str,
-        q: Optional[str] = None,
+        q: str | None = None,
         *,
         fields=("date", "title", "url"),
         scroll="2m",
@@ -226,10 +234,10 @@ class AmcatClient:
         *,
         scroll="2m",
         per_page=100,
-        sort: Optional[Union[str, dict, list]] = None,
+        sort: str | dict | list | None = None,
         fields: Sequence[str] = ("date", "title", "url"),
-        queries: Optional[Union[str, list, dict]] = None,
-        filters: Optional[Dict[str, Union[str, list, dict]]] = None,
+        queries: str | list | dict | None = None,
+        filters: dict[str, str | list | dict] | None = None,
         date_fields: Sequence[str] = ("date",),
     ):
         """
@@ -273,8 +281,8 @@ class AmcatClient:
         field: str,
         value: Any,
         *,
-        queries: Optional[Union[str, list, dict]] = None,
-        filters: Optional[Dict[str, Union[str, list, dict]]] = None,
+        queries: str | list | dict | None = None,
+        filters: dict[str, str | list | dict] | None = None,
     ):
         """
         Update the index by query
@@ -292,10 +300,10 @@ class AmcatClient:
         self,
         index: str,
         *,
-        axes: Optional[str | list] = None,
-        queries: Optional[str | list | dict] = None,
-        filters: Optional[dict[str, str | list | dict]] = None,
-        aggregations: Optional[list] = None,
+        axes: str | list | None = None,
+        queries: str | list | dict | None = None,
+        filters: dict[str, str | list | dict] | None = None,
+        aggregations: list | None = None,
     ):
         """
         Execute a search query on this server and aggregate results
@@ -317,9 +325,9 @@ class AmcatClient:
     def create_index(
         self,
         index: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        guest_role: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
+        guest_role: str | None = None,
     ):
         r"""
         Create an index
@@ -351,10 +359,10 @@ class AmcatClient:
     def modify_index(
         self,
         index: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        guest_role: Optional[str] = None,
-        summary_field: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
+        guest_role: str | None = None,
+        summary_field: str | None = None,
     ):
         """
         Modify an index
@@ -412,7 +420,7 @@ class AmcatClient:
         body = {"role": role.upper()}
         return self._put(f"index/{index}/users/{email}", json=body).json()
 
-    def check_index(self, ix: str) -> Optional[dict]:
+    def check_index(self, ix: str) -> dict[str, Any] | None:
         r = self._get(index=ix, ignore_status=[404])
         if r.status_code == 404:
             return None
@@ -440,7 +448,7 @@ class AmcatClient:
         self,
         index: str,
         articles: Sequence[dict],
-        columns: Optional[dict] = None,
+        columns: dict[str, str] | None = None,
         chunk_size=100,
         show_progress=False,
         allow_unknown_fields=False,
@@ -475,12 +483,12 @@ class AmcatClient:
             from tqdm import tqdm
 
             generator: Iterable[list[Any]] = tqdm(
-                self._chunks(articles, chunk_size=chunk_size),
+                _chunks(articles, chunk_size=chunk_size),
                 total=math.ceil(len(articles) / chunk_size),
                 unit="chunks",
             )
         else:
-            generator = self._chunks(articles, chunk_size=chunk_size)
+            generator = _chunks(articles, chunk_size=chunk_size)
         successes, failures = 0, []
         for chunk in generator:
             if not allow_unknown_fields:
@@ -547,8 +555,8 @@ class AmcatClient:
         field: str,
         task: str,
         endpoint: str,
-        arguments: List[dict],
-        outputs: List[dict],
+        arguments: list[dict],
+        outputs: list[dict],
     ):
         body = dict(
             field=field,
@@ -566,8 +574,8 @@ class AmcatClient:
         self,
         index: str,
         n=10,
-        prefix: Optional[str] = None,
-        start_after: Optional[str] = None,
+        prefix: str | None = None,
+        start_after: str | None = None,
         recursive=False,
         presigned_get=False,
         metadata=False,

@@ -29,7 +29,14 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["twine", "types-tqdm", "types-requests", "types-appdirs"]
+dev = [
+    "twine",
+    "types-tqdm",
+    "types-requests",
+    "types-appdirs",
+    "ruff>=0.15.6",
+    "mypy>=1.19.1",
+]
 
 [tool.mypy]
 [[tool.mypy.overrides]]

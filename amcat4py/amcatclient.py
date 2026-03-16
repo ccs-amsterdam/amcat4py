@@ -580,9 +580,9 @@ class AmcatClient:
         action: str,
         field: str,
         tag: str,
-        ids=None,
-        queries=None,
-        filters=None,
+        ids: list[str] | None = None,
+        queries: str | list | dict | None = None,
+        filters: dict[str, str | list | dict] | None = None,
     ):
         body = dict(
             field=field,

@@ -38,6 +38,9 @@ dev = [
     "mypy>=1.19.1",
 ]
 
+[tool.basedpyright]
+typeCheckingMode = "basic"
+
 [tool.mypy]
 [[tool.mypy.overrides]]
 module = "requests_oauthlib"

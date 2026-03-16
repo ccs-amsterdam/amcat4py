@@ -159,8 +159,9 @@ class AmcatClient:
         else:
             data = None
             headers = {}
-        return self._request("put", url=self._url(url, index), data=data, headers=headers,
-                             params=params, ignore_status=ignore_status)
+        return self._request(
+            "put", url=self._url(url, index), data=data, headers=headers, params=params, ignore_status=ignore_status
+        )
 
     def _delete(self, url=None, index=None, ignore_status=None):
         return self._request("delete", url=self._url(url, index), ignore_status=ignore_status)
@@ -602,62 +603,3 @@ class AmcatClient:
         :param role: New global role (e.g. "ADMIN", "WRITER", "NONE")
         """
         return self._put(f"users/{email}", json={"role": role}).json()
-
-    def list_api_keys(self) -> list[dict[str, Any]]:
-        """List API keys for the authenticated user."""
-        return self._get("api_keys").json()
-
-    def create_api_key(
-        self,
-        name: str,
-        expires_at: str,
-        restrictions: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Create a new API key.
-
-        :param name: Display name for the key
-        :param expires_at: Expiration date in ISO format (e.g. "2026-12-31T23:59:59")
-        :param restrictions: Optional dict with keys like server_role, project_roles, etc.
-        :return: dict with 'id' and 'api_key' (key value is only returned on creation)
-        """
-        body: dict[str, Any] = {"name": name, "expires_at": expires_at}
-        if restrictions is not None:
-            body["restrictions"] = restrictions
-        return self._post("api_keys", json=body).json()
-
-    def delete_api_key(self, api_key_id: str) -> None:
-        """
-        Delete an API key by ID.
-
-        :param api_key_id: The ID of the key to delete
-        """
-        self._delete(f"api_keys/{api_key_id}")
-
-    def update_api_key(
-        self,
-        api_key_id: str,
-        name: str | None = None,
-        expires_at: str | None = None,
-        restrictions: dict[str, Any] | None = None,
-        regenerate_key: bool = False,
-    ) -> dict[str, Any]:
-        """
-        Update an existing API key.
-
-        :param api_key_id: The ID of the key to update
-        :param name: New display name
-        :param expires_at: New expiration date in ISO format
-        :param restrictions: New role restrictions
-        :param regenerate_key: If True, regenerate the secret key value
-        :return: dict with 'id' and 'api_key' (only present if regenerate_key=True)
-        """
-        body: dict[str, Any] = {"regenerate_key": regenerate_key}
-        if name is not None:
-            body["name"] = name
-        if expires_at is not None:
-            body["expires_at"] = expires_at
-        if restrictions is not None:
-            body["restrictions"] = restrictions
-        return self._put(f"api_keys/{api_key_id}", json=body).json()
-

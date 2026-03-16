@@ -2,7 +2,6 @@ import logging
 from collections.abc import Iterable, Sequence
 from datetime import date, datetime, time
 from json import dumps
-from pathlib import Path
 from typing import Any
 
 import requests
@@ -296,6 +295,26 @@ class AmcatClient:
         body = {"field": field, "value": value, "queries": queries, "filters": filters}
         return self._post(f"index/{index}/update_by_query", json=body).json()
 
+    def delete_by_query(
+        self,
+        index: str,
+        *,
+        queries: str | list | dict | None = None,
+        filters: dict[str, str | list | dict] | None = None,
+        ids: list[str] | None = None,
+    ) -> dict[str, int]:
+        """
+        Delete documents by query
+
+        :param index: The name of the index
+        :param queries: One or more query strings or objects to match documents
+        :param filters: A dictionary of filters to apply
+        :param ids: Explicit document IDs to delete
+        :return: dict with keys 'updated' and 'total'
+        """
+        body = {"queries": queries, "filters": filters, "ids": ids}
+        return self._post(f"index/{index}/delete_by_query", json=body).json()
+
     def query_aggregate(
         self,
         index: str,
@@ -526,6 +545,35 @@ class AmcatClient:
     def get_fields(self, index: str) -> dict:
         return self._get("fields", index).json()
 
+    def update_fields(self, index: str, body: dict[str, Any]) -> None:
+        """
+        Update settings on existing fields (e.g. meta, display name).
+
+        :param index: The name of the index
+        :param body: A dict mapping field names to their updated settings
+        """
+        self._put("fields", index, json=body)
+
+    def get_field_values(self, index: str, field: str, **params) -> list[Any]:
+        """
+        Get unique values for a field.
+
+        :param index: The name of the index
+        :param field: The field name to retrieve values for
+        :param params: Additional query parameters (e.g. size, q)
+        """
+        return self._get(f"fields/{field}/values", index, params=params or None).json()
+
+    def get_field_stats(self, index: str, field: str, **params) -> dict[str, Any]:
+        """
+        Get statistics (min, max, n etc.) for a numeric or date field.
+
+        :param index: The name of the index
+        :param field: The field name
+        :param params: Additional query parameters
+        """
+        return self._get(f"fields/{field}/stats", index, params=params or None).json()
+
     def tags_update(
         self,
         index: str,
@@ -546,81 +594,70 @@ class AmcatClient:
         )
         self._post("tags_update", index, json=body)
 
-    def get_preprocessing_tasks(self):
-        return self._get("preprocessing_tasks").json()
-
-    def add_preprocessing_instruction(
-        self,
-        index: str,
-        field: str,
-        task: str,
-        endpoint: str,
-        arguments: list[dict],
-        outputs: list[dict],
-    ):
-        body = dict(
-            field=field,
-            task=task,
-            endpoint=endpoint,
-            arguments=arguments,
-            outputs=outputs,
-        )
-        self._post(f"index/{index}/preprocessing", json=body)
-
-    def get_preprocessing_instruction(self, index: str, field: str):
-        return self._get(f"index/{index}/preprocessing/{field}").json()
-
-    def multimedia_list(
-        self,
-        index: str,
-        n=10,
-        prefix: str | None = None,
-        start_after: str | None = None,
-        recursive=False,
-        presigned_get=False,
-        metadata=False,
-        all_pages=True,
-    ):
-        """Get a list of multimedia files in the storage for this index
-        See https://min.io/docs/minio/linux/developers/python/API.html#list_objects
-
-        :param n: Number of items to return (ordered alphabetically)
-        :param start_after: Start after the given key (for pagination)
-        :param prefix: Filter on this prefix (e.g. a folder name/)
-        :param recursive: If True, list all objects rather than per-folder
-        :param metadata: Include metadata in results (separately retrieved per object by the backend)
-        :param presigned_get: Include a pre-signed GET url for each object (separately retrieved per object by the backend)
+    def modify_user(self, email: str, role: str) -> dict[str, Any]:
         """
-        params = dict(
-            n=n,
-            prefix=prefix,
-            start_after=start_after,
-            presigned_get=presigned_get,
-            metadata=metadata,
-            recursive=recursive,
-        )
-        while True:
-            res = self._get(f"index/{index}/multimedia/list", params=params).json()
-            yield from res
-            if (not all_pages) or (len(res) < n):
-                break
-            params["start_after"] = res[-1]["key"]
+        Modify a user's global role (requires ADMIN).
 
-    def multimedia_presigned_post(self, index):
-        return self._get(f"index/{index}/multimedia/presigned_post").json()
+        :param email: Email address of the user
+        :param role: New global role (e.g. "ADMIN", "WRITER", "NONE")
+        """
+        return self._put(f"users/{email}", json={"role": role}).json()
 
-    def multimedia_upload_files(self, index, files: Iterable[Path | str], prefix=None):
-        res = self.multimedia_presigned_post(index)
-        paths: list[Path] = [file if isinstance(file, Path) else Path(file) for file in files]
-        missing = [p for p in paths if not p.exists()]
-        if missing:
-            raise ValueError(f"File(s) not found: {missing}")
-        url = res["url"]
-        form_data = res["form_data"]
-        for p in paths:
-            with p.open("rb") as f:
-                requests.post(
-                    url=url,
-                    data={"key": f"{prefix}{p.name}", **form_data},
-                    files={"file": f},
-                )
+    def list_api_keys(self) -> list[dict[str, Any]]:
+        """List API keys for the authenticated user."""
+        return self._get("api_keys").json()
+
+    def create_api_key(
+        self,
+        name: str,
+        expires_at: str,
+        restrictions: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Create a new API key.
+
+        :param name: Display name for the key
+        :param expires_at: Expiration date in ISO format (e.g. "2026-12-31T23:59:59")
+        :param restrictions: Optional dict with keys like server_role, project_roles, etc.
+        :return: dict with 'id' and 'api_key' (key value is only returned on creation)
+        """
+        body: dict[str, Any] = {"name": name, "expires_at": expires_at}
+        if restrictions is not None:
+            body["restrictions"] = restrictions
+        return self._post("api_keys", json=body).json()
+
+    def delete_api_key(self, api_key_id: str) -> None:
+        """
+        Delete an API key by ID.
+
+        :param api_key_id: The ID of the key to delete
+        """
+        self._delete(f"api_keys/{api_key_id}")
+
+    def update_api_key(
+        self,
+        api_key_id: str,
+        name: str | None = None,
+        expires_at: str | None = None,
+        restrictions: dict[str, Any] | None = None,
+        regenerate_key: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Update an existing API key.
+
+        :param api_key_id: The ID of the key to update
+        :param name: New display name
+        :param expires_at: New expiration date in ISO format
+        :param restrictions: New role restrictions
+        :param regenerate_key: If True, regenerate the secret key value
+        :return: dict with 'id' and 'api_key' (only present if regenerate_key=True)
+        """
+        body: dict[str, Any] = {"regenerate_key": regenerate_key}
+        if name is not None:
+            body["name"] = name
+        if expires_at is not None:
+            body["expires_at"] = expires_at
+        if restrictions is not None:
+            body["restrictions"] = restrictions
+        return self._put(f"api_keys/{api_key_id}", json=body).json()
+

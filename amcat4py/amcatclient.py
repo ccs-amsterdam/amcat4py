@@ -2,7 +2,7 @@ import logging
 from collections.abc import Iterable, Sequence
 from datetime import date, datetime, time
 from json import dumps
-from typing import Any
+from typing import Any, Literal
 
 import requests
 from requests import HTTPError
@@ -316,6 +316,34 @@ class AmcatClient:
         body = {"queries": queries, "filters": filters, "ids": ids}
         return self._post(f"index/{index}/delete_by_query", json=body).json()
 
+    def reindex(
+        self,
+        index: str,
+        destination: str,
+        *,
+        queries: str | list | dict | None = None,
+        filters: dict[str, str | list | dict] | None = None,
+        field_options: dict[str, dict[str, Any]] | None = None,
+    ) -> dict:
+        """
+        Reindex documents from `index` into `destination`, optionally filtering and transforming fields.
+
+        :param index: The source index
+        :param destination: The destination index id
+        :param queries: One or more query strings/objects to select documents
+        :param filters: Filters to apply when selecting documents
+        :param field_options: Per-field reindex options, mapping field name to a dict with optional keys
+            'rename' (str), 'exclude' (bool), and 'type' (field type)
+        """
+        body: dict[str, Any] = {"destination": destination}
+        if queries is not None:
+            body["queries"] = queries
+        if filters is not None:
+            body["filters"] = filters
+        if field_options is not None:
+            body["field_options"] = field_options
+        return self._post(f"index/{index}/reindex", json=body).json()
+
     def query_aggregate(
         self,
         index: str,
@@ -472,12 +500,11 @@ class AmcatClient:
         chunk_size=100,
         show_progress=False,
         allow_unknown_fields=False,
+        operation: Literal["index", "upsert", "create", "update"] = "index",
     ) -> tuple:
         """
         Upload documents to the server. First argument is the name of the index where the new documents should be inserted.
         Second argument is an iterable (e.g., a list) of dictionaries. Each dictionary represents a single document.
-        Required keys are: `title`, `text`, `date`, and `url`.
-        You can optionally specify the column types with a dictionary.
         If the articles contain unknown fields, a ValueError is raised unless allow_unknown_fields is set to True.
         By default, the articles are uploaded in chunks of 100 documents. You can adjust this accordingly.
         For larger uploads, you have the option to show a progress bar (make sure tqdm is installed).
@@ -487,14 +514,16 @@ class AmcatClient:
         :param columns: an optional dictionary of field types.
         :param chunk_size: number of documents to upload per batch (default: 100)
         :param show_progress: show a progress bar when uploading documents (default: False)
-        :param allow_new_fields: if set, documents with unknown fields are allowed (default: False)
+        :param allow_unknown_fields: if set, documents with unknown fields are allowed (default: False)
+        :param operation: the operation to perform: 'index' (default, replaces existing), 'upsert' (create or update),
+            'create' (only new documents), or 'update' (only existing documents)
         """
         body: dict[str, Any] = {}
         if columns:
             body["columns"] = columns
         known_fields: set = set()
         if not allow_unknown_fields:
-            known_fields = set(self.get_fields(index).keys())
+            known_fields = set(self.get_fields(index).keys()) | {"_id"}
             if columns:
                 known_fields |= set(columns.keys())
         if show_progress:
@@ -515,7 +544,7 @@ class AmcatClient:
                 for doc in chunk:
                     if unknown := (set(doc.keys()) - known_fields):
                         raise ValueError(f"Document contained unknown fields: {unknown}")
-            body = {"documents": chunk}
+            body = {"documents": chunk, "operation": operation}
             result = self._post("documents", index=index, json=body).json()
             successes += result["successes"]
             failures += result["failures"]

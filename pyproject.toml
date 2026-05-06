@@ -7,7 +7,7 @@ include = ["amcat4py/"]
 
 [project]
 name = "amcat4py"
-version = "4.2.1"
+version = "4.2.5"
 description = "Python client for AmCAT4 API"
 authors = [
     { name = "Wouter van Atteveldt", email = "wouter@vanatteveldt.com" },

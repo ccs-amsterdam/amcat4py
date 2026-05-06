@@ -316,7 +316,7 @@ class AmcatClient:
         body = {"queries": queries, "filters": filters, "ids": ids}
         return self._post(f"index/{index}/delete_by_query", json=body).json()
 
-    def reindex(
+    def post_reindex(
         self,
         index: str,
         destination: str,
@@ -326,10 +326,10 @@ class AmcatClient:
         field_options: dict[str, dict[str, Any]] | None = None,
     ) -> dict:
         """
-        Reindex documents from `index` into `destination`, optionally filtering and transforming fields.
+        Low-level wrapper around POST /api/index/{ix}/reindex. For most use cases, use :meth:`reindex` instead.
 
         :param index: The source index
-        :param destination: The destination index id
+        :param destination: The destination index id (must already exist)
         :param queries: One or more query strings/objects to select documents
         :param filters: Filters to apply when selecting documents
         :param field_options: Per-field reindex options, mapping field name to a dict with optional keys
@@ -343,6 +343,49 @@ class AmcatClient:
         if field_options is not None:
             body["field_options"] = field_options
         return self._post(f"index/{index}/reindex", json=body).json()
+
+    def reindex(
+        self,
+        index: str,
+        destination: str,
+        *,
+        fields: dict[str, dict[str, Any]] | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        guest_role: str | None = None,
+        queries: str | list | dict | None = None,
+        filters: dict[str, str | list | dict] | None = None,
+    ) -> dict:
+        """
+        Reindex documents from `index` to `destination`. The destination index is created if it
+        does not exist, and field types are carried over from the source. Any field not mentioned
+        in `fields` is copied unchanged.
+
+        :param index: The source index
+        :param destination: The destination index id
+        :param fields: Optional dict of per-field changes. Each value is a dict with any of
+            'rename' (str, new field name), 'exclude' (bool, drop field), 'type' (str, new AmCAT
+            field type). E.g. ``{"old": {"rename": "new"}, "bad": {"exclude": True},
+            "txt": {"type": "keyword"}}``
+        :param name: Display name for the destination index (defaults to `destination`); only used
+            when creating a new index
+        :param description: Description; only used when creating a new index
+        :param guest_role: Guest role; only used when creating a new index
+        :param queries: Optional query strings/objects to filter documents during reindex
+        :param filters: Optional filters to apply during reindex
+        """
+        source_fields = self.get_fields(index)
+        dest_types: dict[str, Any] = {fname: info["type"] for fname, info in source_fields.items()}
+        for fname, opts in (fields or {}).items():
+            new_name = opts.get("rename", fname)
+            new_type = opts.get("type", dest_types.get(fname))
+            dest_types.pop(fname, None)
+            if not opts.get("exclude", False):
+                dest_types[new_name] = new_type
+        if self.check_index(destination) is None:
+            self.create_index(destination, name=name or destination, description=description, guest_role=guest_role)
+        self.set_fields(destination, dest_types)
+        return self.post_reindex(index, destination, queries=queries, filters=filters, field_options=fields)
 
     def query_aggregate(
         self,
